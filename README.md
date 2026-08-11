@@ -35,7 +35,7 @@ make help         # every target
 that passes locally passes CI by construction. Target list is canonical in
 `docs/appendix/A3-CONFIGURATION.md` §5.2.
 
-**Prerequisites:** `uv` · Node 20+ with `corepack enable pnpm` · GNU Make ·
+**Prerequisites:** `uv` · Node 22.13+ with `corepack enable pnpm` · GNU Make ·
 `gitleaks` (the pre-commit secret scan fails loudly without it) · **Docker from
 T1.2** — the Supabase CLI runs the whole local stack in containers, so
 `supabase start` and `supabase db reset` both need the daemon.

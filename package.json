@@ -5,7 +5,7 @@
   "description": "RootTrace AI — pnpm workspace root",
   "packageManager": "pnpm@11.21.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "scripts": {
     "lint": "eslint . --no-error-on-unmatched-pattern",
