@@ -289,9 +289,59 @@ Twenty tables share a generic project-scoped policy; six (`projects`, `organizat
 - A cardinality rule (`at least one owner`) cannot be expressed in RLS and needs a trigger.
 - Four architecture regression tests guard the design itself, because B2 and B4 arose from plausible-looking code that no functional test would have caught.
 
+### Option B, re-examined empirically during T1.2
+
+Option B was rejected above on reasoning. It was retested against a real database
+before writing the migrations, because eliminating `BYPASSRLS` entirely would
+remove the only global RLS bypass in our system apart from Supabase's own
+`service_role`. The proposal: have `project_ids()` read only the membership
+tables, and write the policies on `projects` and the two membership tables inline
+so no helper is involved.
+
+**Measured result — the boundary is sharper than "not possible".**
+
+| Variant | Outcome |
+|---|---|
+| Membership policy with an inline co-member clause referencing its own table | `ERROR: infinite recursion detected in policy for relation` |
+| Same clause routed through `projects`, so the recursion is mutual rather than direct | Same error — PostgreSQL detects it across relations |
+| Membership policy restricted to **own rows only**, with `projects` and the 20 generic tables inline-reading it | **Works.** Correct isolation, no privileged role |
+
+So `BYPASSRLS` is not required for 21 of the 26 tables. It is required for exactly
+one capability: **seeing co-members** on `project_members` and
+`organization_members`. Dropping that capability would eliminate the privileged
+role outright, at the cost of a user being unable to see who else belongs to their
+project or organization.
+
+That is a product decision, not an implementation one, so the design stands.
+Recorded here because the trade is now measured rather than assumed, and because
+if team management stays out of scope the exchange may be worth making later.
+
+### Known limitation — hosted Supabase
+
+`create role … bypassrls` requires the executing role to hold `BYPASSRLS` itself;
+a plain `CREATEROLE` role cannot grant the attribute. Supabase's `postgres` role
+holds both locally, and the migration applies cleanly, but this has **not** been
+verified against a hosted project. If it fails there, the mitigation is the
+own-row-only membership variant measured above, which needs no privileged role at
+all.
+
+Three adjacent facts, each found by a migration failing loudly at T1.2 and each
+absent from `04` §12.2 as written:
+
+- `postgres` is **not** a superuser on Supabase and must be granted membership in
+  `rt_rls_owner` before it can create a schema owned by it, or reassign
+  ownership to it.
+- `BYPASSRLS` exempts a role from **policies only**. It confers no table
+  privileges, so the owner role needs explicit `SELECT` on the three tables its
+  helpers read.
+- The helpers cannot call `auth.uid()`: they run as `rt_rls_owner`, which has no
+  `USAGE` on the `auth` schema, and `postgres` cannot grant it — the attempt
+  emits a `WARNING`, not an error, so it appears to work. `rt_auth.uid()` reads
+  the request JWT directly instead.
+
 ### Revisit if
 
-Supabase changes `service_role`'s RLS semantics, or a future feature needs an authorization predicate that cannot be expressed as a set of project ids.
+Supabase changes `service_role`'s RLS semantics, or a future feature needs an authorization predicate that cannot be expressed as a set of project ids, or team-membership visibility leaves scope — see Option B above.
 
 ---
 

@@ -94,7 +94,11 @@ Real Postgres, real Redis, real containers. Ephemeral per run via `testcontainer
 | Migrations apply to a fresh DB | `supabase db reset` clean; expected schema |
 | Migrations are idempotent | Re-running is a no-op |
 | **Partitioned PKs are legal (B3)** | `raw_events` and `error_occurrences` create successfully with composite PKs |
+| **Positive control: own rows ARE visible** | For **every** tenant table, user A sees their own project's rows. Parameterised over all 26, exactly like the negative case. Without this the isolation suite is vacuous — a missing GRANT returns zero rows too, and every test below would pass with all policies dropped |
 | **RLS blocks cross-tenant reads** | For **every** tenant table, user A sees zero rows from project B |
+| **Viewer cannot write** | A `viewer` on project A can read it but every INSERT/UPDATE/DELETE affects zero rows, and `rt_auth.can_write_project()` returns false. Otherwise write isolation is assumed rather than tested |
+| **Late-arriving occurrence has a partition (B13)** | With the clock pinned to the 2nd of a month, an occurrence dated 6 days earlier inserts successfully and lands in the *previous* month's partition. `RT-INGEST-0012` accepts events up to 7 days old, so this is a valid event, and `p_months_behind` is what keeps it from failing |
+| **No DEFAULT partition exists** | An occurrence dated outside every partition fails loudly with `no partition of relation found for row`. A DEFAULT partition would absorb it silently |
 | **RLS blocks cross-tenant writes** | Insert with another project's ID fails |
 | **RLS coverage assertion** | Every `public` relation — **including every partition** — has RLS enabled **and** forced; migration fails otherwise |
 | **RLS policy-presence assertion** | No relation is RLS-enabled with zero policies (default-deny would pass the coverage check while returning nothing) |

@@ -352,11 +352,10 @@ create table raw_events (
   primary key (id, received_at)
 ) partition by range (received_at);
 
--- Monthly partitions; created 3 months ahead by a maintenance job.
--- EVERY partition must be secured at creation — see §12.10 (B13).
-create table raw_events_2026_08 partition of raw_events
-  for values from ('2026-08-01') to ('2026-09-01');
-select rt_admin.secure_partition('raw_events_2026_08');
+-- NO PARTITION IS CREATED HERE. rt_admin.ensure_partitions() creates and
+-- secures every partition, in migration …001400 — see §12.10 (B13) and §15.
+-- Inline DDL here would be a second creation path that runs exactly once and is
+-- never exercised again, and that is precisely where B13 reopens.
 
 create index on raw_events (project_id, received_at desc);
 create index on raw_events (batch_id);
@@ -434,9 +433,9 @@ create table error_occurrences (
   primary key (id, occurred_at)
 ) partition by range (occurred_at);
 
-create table error_occurrences_2026_08 partition of error_occurrences
-  for values from ('2026-08-01') to ('2026-09-01');
-select rt_admin.secure_partition('error_occurrences_2026_08');
+-- Again, no inline partition. Note that `occurred_at` is the CUSTOMER's
+-- timestamp and S1 accepts events up to 7 days old, so partitions must exist
+-- BEHIND the current month as well as ahead — see ensure_partitions(§12.10).
 
 create index on error_occurrences (issue_id, occurred_at desc);
 create index on error_occurrences (project_id, occurred_at desc);
@@ -878,10 +877,35 @@ Owned by `rt_rls_owner`, a role created solely to hold `BYPASSRLS`. It owns noth
 ```sql
 create role rt_rls_owner nologin bypassrls;
 
+-- Migrations run as `postgres`, which on Supabase is NOT a superuser. Creating a
+-- schema owned by another role — and reassigning function ownership to it —
+-- requires membership: otherwise `must be able to SET ROLE "rt_rls_owner"`.
+grant rt_rls_owner to current_user;
+
 create schema if not exists rt_auth authorization rt_rls_owner;
 revoke all on schema rt_auth from public;
 grant usage on schema rt_auth to authenticated;
+
+-- BYPASSRLS exempts a role from POLICIES. It confers NO table privileges, so the
+-- owner needs explicit read on everything its helpers touch, and nothing more.
+grant select on public.organization_members, public.project_members, public.projects
+  to rt_rls_owner;
 ```
+
+**`rt_auth.uid()`, not `auth.uid()`.** The helpers are `SECURITY DEFINER` and so execute as `rt_rls_owner`, which holds no `USAGE` on the `auth` schema — every policy in the system then fails at *query* time with `permission denied for schema auth`. The obvious repair does not work: `grant usage on schema auth to rt_rls_owner` run as `postgres` emits `WARNING: no privileges were granted`, because the schema belongs to `supabase_admin`. A warning does not fail a migration, so the fix appears to apply and does nothing. `auth.uid()` is itself a one-line read of the request JWT, so we read it directly and depend on no other schema:
+
+```sql
+create or replace function rt_auth.uid() returns uuid
+language sql stable
+set search_path = pg_catalog
+as $$
+  select nullif(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid
+$$;
+```
+
+Every helper and every policy below uses this one definition. It must be owned by `rt_rls_owner` as well — the blanket `revoke execute … from public` would otherwise leave the helpers unable to call it.
+
+> Each of these three was found by a migration failing loudly on the first `supabase db reset`, which is the intended behaviour and the reason the assertions run at all. None of them was visible from the specification.
 
 ```sql
 -- Organizations the caller belongs to.
@@ -1161,7 +1185,11 @@ end $$;
 
 ### 12.9 Coverage assertions
 
-Two assertions, because "RLS enabled" and "RLS effective" are different claims.
+Three assertions, because "RLS enabled", "RLS effective", and "RLS everywhere we said" are different claims.
+
+**There is no exemption list.** One previously excluded `schema_migrations`, a table that never appears in `public` — the Supabase CLI keeps its history in the `supabase_migrations` schema. A standing exemption for a hypothetical table is fail-open: it silently covers whatever later happens to match the name. If a legitimate non-tenant table ever lands in `public`, the assertion fires and we decide deliberately.
+
+> **What these assertions cannot do.** They check *structure* — enabled, forced, policy present. They cannot tell you a policy is **evaluable**: all three passed while every policy raised `permission denied for schema auth` at query time (§12.2). That gap is covered by the positive-control read in `14` §4.1, and it is the reason a purely negative isolation suite is insufficient — "user A sees zero of B's rows" is equally true when nothing works at all.
 
 ```sql
 -- (1) Fails the migration if any relation holding tenant data lacks forced RLS.
@@ -1170,10 +1198,9 @@ Two assertions, because "RLS enabled" and "RLS effective" are different claims.
 do $$
 declare missing text;
 begin
-  select string_agg(c.relname, ', ') into missing
+  select string_agg(c.relname, ', ' order by c.relname) into missing
     from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind in ('r','p')
-     and c.relname not in ('schema_migrations')
      and (not c.relrowsecurity or not c.relforcerowsecurity);
   if missing is not null then
     raise exception 'RLS missing or not forced on: %', missing;
@@ -1194,6 +1221,23 @@ begin
      and not exists (select 1 from pg_policy p where p.polrelid = c.oid);
   if missing is not null then
     raise exception 'RLS enabled but no policy on: %', missing;
+  end if;
+end $$;
+
+-- (3) Fails the migration if the logical table count drifts from the 26 fixed in
+--     `18` §6. Partitions are excluded here (they inherit from a parent), so this
+--     counts logical tables only: 20 generic + 6 bespoke. A new table added
+--     without a policy, or an old one quietly dropped from the loop array, fails
+--     the run rather than drifting away from the documented figure.
+do $$
+declare n int;
+begin
+  select count(*) into n
+    from pg_class c join pg_namespace ns on ns.oid = c.relnamespace
+   where ns.nspname = 'public' and c.relkind in ('r','p') and c.relrowsecurity
+     and not exists (select 1 from pg_inherits i where i.inhrelid = c.oid);
+  if n <> 26 then
+    raise exception 'expected 26 RLS-protected logical tables, found %', n;
   end if;
 end $$;
 ```
@@ -1249,15 +1293,17 @@ The policies are **identical to the parent's**, so the two access paths cannot d
 **The maintenance job carries the same obligation.** It pre-creates three months of partitions ahead (`04` §15), and a partition created without this call reopens the hole silently, on a monthly cadence, with no code change to review:
 
 ```sql
-create or replace function rt_admin.ensure_partitions(p_months_ahead int default 3)
-returns void language plpgsql
+create or replace function rt_admin.ensure_partitions(
+  p_months_ahead int default 3,
+  p_months_behind int default 1        -- see the note below; NOT optional in practice
+) returns void language plpgsql
 set search_path = pg_catalog, public
 as $$
 declare
   target date; part text; parent text;
 begin
   foreach parent in array array['raw_events','error_occurrences'] loop
-    for i in 0..p_months_ahead loop
+    for i in -p_months_behind..p_months_ahead loop
       target := date_trunc('month', current_date) + (i || ' months')::interval;
       part   := parent || '_' || to_char(target, 'YYYY_MM');
 
@@ -1273,6 +1319,10 @@ begin
   end loop;
 end $$;
 ```
+
+**`p_months_behind` is not a convenience.** `error_occurrences` is partitioned on `occurred_at` — the *customer's* timestamp, not ours — and S1 accepts events up to 7 days old (`RT-INGEST-0012`). On the 1st to 7th of any month a perfectly valid event carries last month's date. Current-month-forward only makes that insert fail with `no partition of relation found for row`: intermittent, confined to the first week of a month, and therefore the worst possible failure signature. A `DEFAULT` partition would also prevent the error and is deliberately **not** used — rows land in it silently and detaching one later is painful, which trades a loud failure for a quiet one.
+
+`secure_partition()` also issues the partition's `GRANT`. Privileges are checked against the relation actually named in a query, and grants no more propagate from parent to partition than policies do; without it a direct partition read fails with `permission denied`, which resembles isolation without being it — and would make the B13 regression test pass for the wrong reason.
 
 Creation and securing live in **one function**, so there is no code path that produces an unsecured partition. A test asserts that every partition of every partitioned table has RLS forced and at least one policy — it runs after the maintenance job in CI, not only after the initial migration, because the monthly job is where this would regress.
 
@@ -1415,7 +1465,7 @@ infra/supabase/migrations/
 ├─ 20260801001100_membership_triggers.sql   ← last-owner invariant (§12.5)
 ├─ 20260801001200_partition_security.sql    ← rt_admin.secure_partition + ensure_partitions (§12.10)
 ├─ 20260801001300_materialized_views.sql    ← views + REVOKE + accessors (§13)
-├─ 20260801001400_partition_maintenance.sql ← schedules ensure_partitions()
+├─ 20260801001400_partition_maintenance.sql ← CREATES the first partitions, then schedules ensure_partitions()
 └─ 20260801001500_rls_assertions.sql        ← both coverage assertions (§12.9), LAST
 ```
 
@@ -1424,7 +1474,8 @@ infra/supabase/migrations/
 | Constraint | Why |
 |---|---|
 | `auth_helpers` before `rls_policies` | Every policy references `rt_auth.*` |
-| `partition_security` before `errors` partitions are created | `secure_partition()` must exist when the first partition is made |
+| `partition_security` before `partition_maintenance` | `ensure_partitions()` is defined there and called there |
+| **No partition is created before `partition_maintenance`** | A partition's policies reference `rt_auth.*` (`…000900`) and are applied by `secure_partition()` (`…001200`). Creating one in `…000400`, as this document originally did, would make migration 5 depend on migrations 10 and 13 — and would be a second creation path, never exercised again, which is exactly where B13 reopens |
 | `materialized_views` after `auth_helpers` | Accessors call `rt_auth.project_ids()` |
 | **`rls_assertions` LAST** | It is the gate. Running it earlier would fire on tables that are legitimately not yet secured |
 
