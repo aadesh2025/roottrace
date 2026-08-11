@@ -78,26 +78,32 @@ jobs:
       - name: make audit
         run: make audit
 
-# ── Enabled by T1.2 — see docs/15 §3 ─────────────────────────────────────────
-#
-# Phase 1 has no integration suite, and `pytest -m integration` exits 5 on an
-# empty selection. The alternative considered and rejected was a flag that
-# tolerates an empty run: that is a permanent escape hatch for a two-week
-# problem, and it would go on quietly passing long after the suite exists but
-# has stopped being collected.
-#
-# T1.2 writes the 15 migrations and the first integration tests, and its
-# definition of done requires this job to be uncommented and running on PRs.
-#
-#  integration:
-#    name: integration (Postgres + Redis via testcontainers)
-#    runs-on: ubuntu-latest
-#    steps:
-#      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-#      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-#        with:
-#          enable-cache: true
-#      - name: Install
-#        run: uv sync --all-groups
-#      - name: make test-integration
-#        run: make test-integration
+  integration:
+    name: integration (RLS + partitions, real Postgres)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Enable pnpm
+        run: corepack enable pnpm
+
+      - name: Install
+        run: make bootstrap
+
+      # Brings up the Supabase stack and applies all 15 migrations from empty.
+      # The migrations are the thing under test as much as the suite is: the
+      # three coverage assertions in ...001500 fail the RESET, not a test, so a
+      # missing policy never reaches the assertions below.
+      - name: make db-reset
+        run: make db-reset
+
+      - name: make test-integration
+        run: make test-integration

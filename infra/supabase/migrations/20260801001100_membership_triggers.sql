@@ -36,6 +36,13 @@ end $$;
 -- answered from a single row. This is the one place the invariant needs a wider
 -- view than any user has, and it returns a boolean, never rows.
 
+-- 000900's blanket `revoke execute on all functions in schema rt_auth from
+-- public` ran BEFORE this function existed, so it would otherwise keep the
+-- default PUBLIC execute grant — leaving a SECURITY DEFINER function that reads
+-- the membership tables callable by `anon`. Blanket revokes only cover what is
+-- already there; anything added later must revoke for itself.
+revoke execute on function rt_auth.assert_owner_remains() from public, anon, authenticated;
+
 drop trigger if exists org_members_keep_owner on organization_members;
 create trigger org_members_keep_owner
   before delete or update on organization_members

@@ -11,8 +11,9 @@
 # Targets that a later phase enables fail loudly and name their ticket. They do
 # not quietly succeed — a green no-op is how a missing gate goes unnoticed.
 
-UV   ?= uv
-PNPM ?= pnpm
+UV       ?= uv
+PNPM     ?= pnpm
+SUPABASE ?= ./node_modules/.bin/supabase
 
 # Pinned by digest, not tag — a tag can be re-pointed, a digest cannot
 # (docs/13 §3). Currently gitleaks v8.30.1. Bump with:
@@ -25,6 +26,10 @@ GITLEAKS_IMAGE ?= zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9
 # enforcing; Phase 4 raises it to 60, Phase 6 to 75, Phase 10 to 80, Phase 15
 # to 85. Security-critical areas are gated separately from Phase 2 at 95.
 RT_COVERAGE_MIN_OVERALL ?= 0
+
+# The security-critical floor from docs/A3 §6.1, enforced from Phase 2. Applies
+# to auth, RLS and tenancy code. Also monotonic.
+RT_COVERAGE_MIN_SECURITY ?= 95
 
 .DEFAULT_GOAL := help
 .PHONY: help bootstrap check fmt fmt-check lint typecheck \
@@ -81,15 +86,35 @@ test-unit: ## pytest -m unit (+ vitest from Phase 16)
 	  --cov --cov-report=term-missing \
 	  --cov-fail-under=$(RT_COVERAGE_MIN_OVERALL)
 
-test-integration: ## pytest -m integration (testcontainers: Postgres + Redis)
-	@echo "test-integration: no integration suite until T1.2 (docs/15 §3)."
-	@echo "T1.2 adds the migrations, the first integration tests, and"
-	@echo "uncomments the integration job in .github/workflows/ci.yml."
-	@exit 1
+test-integration: ## pytest -m integration (against the local Supabase stack)
+	@# Runs against the Supabase-managed Postgres, not a bare testcontainer: the
+	@# schema depends on Supabase roles and the auth schema, which a stock
+	@# Postgres image does not have. Deviation recorded in docs/14 §4.
+	@$(SUPABASE) status --workdir infra >/dev/null 2>&1 || { \
+	  echo "test-integration: Supabase is not running. Start it with:"; \
+	  echo "    make db-reset"; \
+	  exit 1; }
+	$(UV) run pytest -m integration
 
 test-security: ## pytest -m security — RLS, sandbox isolation, injection corpus
-	@echo "test-security: enabled by T1.3 (RLS suite), extended by T6.3 and T10.2."
-	@exit 1
+	@$(SUPABASE) status --workdir infra >/dev/null 2>&1 || { \
+	  echo "test-security: Supabase is not running. Start it with: make db-reset"; \
+	  exit 1; }
+	$(UV) run pytest -m security
+	@# The >=95% security-critical floor (docs/A3 §6.1) applies from this phase.
+	@# It currently measures nothing, and that is stated rather than papered
+	@# over: the RLS implementation is SQL, and there is no Python auth code
+	@# until T1.4. Rather than assert 95% over an empty set — the vacuous pass
+	@# this whole suite exists to prevent — the gate detects its own subjects and
+	@# turns itself on when they appear.
+	@if ls apps/api/roottrace_api/auth*.py apps/worker/roottrace_worker/tenancy*.py \
+	      >/dev/null 2>&1; then \
+	  $(UV) run pytest -m security \
+	    --cov=apps/api/roottrace_api --cov=apps/worker/roottrace_worker \
+	    --cov-fail-under=$(RT_COVERAGE_MIN_SECURITY); \
+	else \
+	  echo "security coverage gate: no Python auth/tenancy modules yet — enabled by T1.4."; \
+	fi
 
 test-e2e: ## playwright test
 	@echo "test-e2e: enabled by Phase 16 (T9.*). No dashboard exists yet."
@@ -101,9 +126,10 @@ dev: ## supabase start · redis · api · worker
 	@echo "dev: enabled by T1.5 (API skeleton). Supabase alone: make db-reset."
 	@exit 1
 
-db-reset: ## supabase db reset + seed
-	@echo "db-reset: enabled by T1.2. infra/supabase/migrations/ is empty."
-	@exit 1
+db-reset: ## supabase db reset + seed (starts the stack if it is down)
+	@$(SUPABASE) status --workdir infra >/dev/null 2>&1 \
+	  && $(SUPABASE) db reset --workdir infra \
+	  || $(SUPABASE) start --workdir infra
 
 # ── Fixtures ───────────────────────────────────────────────────────────────
 

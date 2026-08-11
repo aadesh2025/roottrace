@@ -53,6 +53,10 @@ dev = [
   "pytest-cov>=7.0,<8.0",
   "pre-commit>=4.4,<5.0",
   "pip-audit>=2.9,<3.0",
+  # Integration tests talk to the Supabase-managed Postgres directly: the schema
+  # depends on Supabase roles and the auth schema, which a bare testcontainer
+  # does not have (deviation from `14` §4, noted there).
+  "psycopg[binary]>=3.2,<4.0",
 ]
 
 # ── ruff ───────────────────────────────────────────────────────────────────
@@ -129,7 +133,7 @@ minversion = "8.0"
 # --strict-markers: an unregistered marker is an error, not a silent no-op,
 # so `pytest -m unit` can never quietly select nothing because of a typo.
 addopts = "-q --strict-markers --strict-config"
-testpaths = ["apps", "packages"]
+testpaths = ["apps", "packages", "tests"]
 asyncio_mode = "auto"
 markers = [
   "unit: pure functions and mocked boundaries (docs/14 §3)",
@@ -143,6 +147,8 @@ markers = [
 [tool.coverage.run]
 branch = true
 source = ["apps", "packages"]
+# `tests` is deliberately absent from source: test code is not the thing being
+# measured.
 # __init__.py is deliberately NOT omitted. It is the usual thing to exclude,
 # but package inits hold real exports in this repo, and excluding them here
 # would mean Phase 1 measures literally nothing and reports success.
