@@ -22,3 +22,4 @@ answer is worse than one that admits it cannot.
 
 Canonical values for the reference case `null-prop-01` live in
 `docs/18-CANONICAL-REGISTRY.md` §7. No other document restates them.
+
