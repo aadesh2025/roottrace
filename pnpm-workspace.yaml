@@ -1,0 +1,9 @@
+packages:
+  - apps/web
+  - packages/shared-types
+
+# pnpm blocks postinstall scripts unless a package is listed here. The Supabase
+# CLI's postinstall downloads its platform binary, so it needs the exemption;
+# nothing else does, and the default-deny is the point.
+onlyBuiltDependencies:
+  - supabase

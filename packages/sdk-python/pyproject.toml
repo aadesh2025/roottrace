@@ -1,0 +1,15 @@
+[project]
+name = "roottrace-sdk"
+version = "0.1.0"
+description = "RootTrace AI — Python SDK. Captures exceptions and breadcrumbs. Never raises into the host app."
+requires-python = ">=3.12,<3.13"
+# The SDK is installed into customer applications, so its dependency surface is
+# a liability, not a convenience. Keep it minimal (T2.5, docs/15 §4).
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["roottrace_sdk"]

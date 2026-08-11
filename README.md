@@ -22,6 +22,32 @@ RootTrace AI ingests errors from your backend, retrieves the exact code responsi
 
 ---
 
+## Working on it
+
+```bash
+make bootstrap    # once per clone: uv sync · pnpm install · pre-commit install
+make check        # fmt-check → lint → typecheck → test-unit. The pre-push gate
+make ci           # everything CI runs, in CI order
+make help         # every target
+```
+
+`make check` and the CI `check` job run the identical target set, so a build
+that passes locally passes CI by construction. Target list is canonical in
+`docs/appendix/A3-CONFIGURATION.md` §5.2.
+
+**Prerequisites:** `uv` · Node 20+ with `corepack enable pnpm` · GNU Make ·
+`gitleaks` (the pre-commit secret scan fails loudly without it) · Docker for
+sandbox work from Phase 10.
+
+**On Windows, run `make` from Git Bash, not PowerShell** — it needs `sh.exe` on
+PATH, and from Git Bash recipes behave exactly as they do in CI.
+
+Targets belonging to a later phase fail with the ticket that enables them
+rather than succeeding quietly. That is deliberate: a green no-op is how a
+missing gate goes unnoticed.
+
+---
+
 ## The pipeline
 
 ```

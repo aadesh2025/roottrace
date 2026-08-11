@@ -1,0 +1,24 @@
+{
+  // Solution-style root. `files: []` is deliberate and required: there is no
+  // TypeScript in the repo until Phase 16 (docs/15 §3, T1.1 note A2), and
+  // `tsc --noEmit` on a config with no inputs is an error (TS18003) rather
+  // than a no-op. Workspaces are added to `references` as they gain source.
+  "files": [],
+  "references": [],
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}

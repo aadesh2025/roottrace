@@ -1,0 +1,25 @@
+{
+  "name": "roottrace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RootTrace AI — pnpm workspace root",
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "lint": "eslint . --no-error-on-unmatched-pattern",
+    "typecheck": "node scripts/typecheck-ts.mjs",
+    "fmt": "prettier --write .",
+    "fmt:check": "prettier --check .",
+    "supabase": "supabase"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "eslint": "^9.39.0",
+    "prettier": "^3.6.2",
+    "supabase": "2.113.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.0"
+  }
+}

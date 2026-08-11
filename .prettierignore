@@ -1,0 +1,17 @@
+# The specification is hand-formatted and binding (CLAUDE.md). Letting a
+# formatter rewrite it would produce enormous diffs that hide real contract
+# changes in the noise — and documentation drift is a defect precisely because
+# it has to stay reviewable.
+docs/
+README.md
+CLAUDE.md
+
+# Generated / vendored
+node_modules/
+.venv/
+pnpm-lock.yaml
+uv.lock
+.next/
+dist/
+fixtures/synthetic-repo/
+infra/supabase/.temp/

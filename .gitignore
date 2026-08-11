@@ -1,0 +1,59 @@
+# ── Secrets ───────────────────────────────────────────────────────────────
+# .env.example is the ONLY env file that is tracked. Every other shape is
+# ignored, because a file named .env.local.bak is still a file full of keys.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!**/testdata/**/*.pem
+secrets/
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# ── Node / TypeScript ─────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+.turbo/
+playwright-report/
+test-results/
+
+# ── Supabase ──────────────────────────────────────────────────────────────
+# config.toml IS tracked (it is infrastructure). The local runtime state is not.
+infra/supabase/.branches/
+infra/supabase/.temp/
+infra/supabase/.env
+
+# ── Terraform ─────────────────────────────────────────────────────────────
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+
+# ── Local artefacts ───────────────────────────────────────────────────────
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Transient export written and deleted by `make audit`.
+.audit-requirements.txt

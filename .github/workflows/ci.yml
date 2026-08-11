@@ -1,0 +1,101 @@
+# RootTrace AI — CI.
+#
+# Every job invokes a Make target and nothing else. That is the mechanism by
+# which `make check` locally and the CI check job cannot diverge (docs/A3 §5.2);
+# a job that inlines its own commands here reintroduces the drift.
+#
+# Actions are pinned by COMMIT SHA, never by tag. A tag is mutable and can be
+# re-pointed at arbitrary code by anyone who can push to that repository — the
+# same threat that makes us pin dependencies by hash and images by digest
+# (docs/11 §11.2, A08). The trailing comment is the human-readable version;
+# Dependabot keeps both in step.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The coverage ratchet (docs/A3 §6.1). Raise here and in the Makefile
+  # together, and only ever upward.
+  RT_COVERAGE_MIN_OVERALL: '0'
+
+jobs:
+  check:
+    name: check (fmt · lint · typecheck · unit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+
+      - name: Enable pnpm
+        run: corepack enable pnpm
+
+      - name: Install
+        run: make bootstrap
+
+      # The identical target a developer runs before pushing. If this job and
+      # `make check` ever test different things, that is the bug.
+      - name: make check
+        run: make check
+
+  security:
+    name: security (gitleaks · pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history. gitleaks scanning only the tip would miss a key that
+          # was committed and then "removed" in a later commit — which is the
+          # normal shape of this mistake (docs/11 SC29).
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install Python toolchain
+        run: uv sync --all-groups
+
+      - name: make audit
+        run: make audit
+
+# ── Enabled by T1.2 — see docs/15 §3 ─────────────────────────────────────────
+#
+# Phase 1 has no integration suite, and `pytest -m integration` exits 5 on an
+# empty selection. The alternative considered and rejected was a flag that
+# tolerates an empty run: that is a permanent escape hatch for a two-week
+# problem, and it would go on quietly passing long after the suite exists but
+# has stopped being collected.
+#
+# T1.2 writes the 15 migrations and the first integration tests, and its
+# definition of done requires this job to be uncommented and running on PRs.
+#
+#  integration:
+#    name: integration (Postgres + Redis via testcontainers)
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+#      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+#        with:
+#          enable-cache: true
+#      - name: Install
+#        run: uv sync --all-groups
+#      - name: make test-integration
+#        run: make test-integration

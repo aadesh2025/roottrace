@@ -1,0 +1,22 @@
+# Normalise line endings. Without this, a Windows checkout writes CRLF into
+# shell scripts and SQL migrations, both of which run on Linux in CI and in
+# containers. `sh` on CRLF fails with an unreadable "\r: command not found".
+* text=auto eol=lf
+
+*.sh      text eol=lf
+*.sql     text eol=lf
+Makefile  text eol=lf
+*.bat     text eol=crlf
+*.ps1     text eol=crlf
+
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+
+# Generated — collapse in diffs and exclude from language statistics.
+uv.lock       linguist-generated=true -diff
+pnpm-lock.yaml linguist-generated=true -diff

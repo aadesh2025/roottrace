@@ -298,9 +298,18 @@ Retention schedule in `04` §14. Deletion on request cascades through Postgres f
 | A05 | Security misconfiguration | Typed settings that refuse to boot on missing/invalid config; no debug mode in production; security headers enforced |
 | A06 | Vulnerable components | Dependabot + `pip-audit` + `npm audit` in CI; Trivy on all images; weekly base-image rebuilds |
 | A07 | Auth failures | No passwords; rotating refresh tokens with reuse detection; rate-limited auth endpoints |
-| A08 | Data integrity failures | All dependencies pinned by hash; images pinned by digest; signed commits from the bot |
+| A08 | Data integrity failures | All dependencies pinned by hash; images pinned by digest; **GitHub Actions pinned by commit SHA**; signed commits from the bot |
 | A09 | Logging failures | Structured logs, immutable audit trail, alerting on auth anomalies and cross-tenant attempts |
 | A10 | SSRF | No user-supplied URL is ever fetched. GitHub is the only outbound host, hardcoded. Webhooks are inbound only |
+
+**A08 — third-party GitHub Actions are pinned by commit SHA, never by tag.** A
+tag is a mutable pointer: whoever can push to the action's repository can move
+`v4` to arbitrary code, which then runs in CI with our repository checked out.
+That is the same threat the hash and digest pins already address, so it is named
+here explicitly rather than left to be inferred. Readability is preserved with a
+trailing `# vX.Y.Z` comment, and `dependabot.yml` carries
+`package-ecosystem: "github-actions"` so the pins are bumped rather than
+quietly rotting.
 
 ### Security headers
 
@@ -476,6 +485,7 @@ Every security claim in this document set, with **how it is enforced** and **whi
 | SC27 | Secrets never in a sandbox | Env built from a 10-var allowlist (L7) | `test_sandbox_env_has_no_credentials` (regex `KEY|TOKEN|SECRET|PASSWORD|DSN|URL`) |
 | SC28 | Secrets never in an image layer | Multi-stage build | `docker history` inspection in CI |
 | SC29 | Secrets never in git | `gitleaks` pre-commit + CI on full history | CI job |
+| SC29a | Third-party GitHub Actions pinned by commit SHA, never by tag (§9, A08) | `make audit` rejects any `uses:` without a 40-hex SHA; Dependabot `github-actions` bumps them | `make audit` / CI `security` job |
 | SC30 | Customer secrets envelope-encrypted | AES-256-GCM + KMS data key | `test_customer_key_roundtrip_never_plaintext_at_rest` |
 | SC31 | Installation tokens never persisted | Redis only, 50 min TTL, encrypted | `test_installation_token_not_in_postgres` |
 | SC32 | `evaluation` tier holds no App private key | Boot invariant (C5) | `test_evaluation_tier_rejects_private_key` |

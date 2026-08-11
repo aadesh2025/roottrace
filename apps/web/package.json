@@ -1,0 +1,7 @@
+{
+  "name": "@roottrace/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RootTrace AI dashboard — placeholder until Phase 16. See README.md.",
+  "scripts": {}
+}

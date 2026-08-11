@@ -1,0 +1,43 @@
+// ESLint flat config. Until Phase 16 (docs/15 §3) there is no TypeScript to
+// lint, so this run is a no-op by construction — stated in T1.1 rather than
+// disguised. The config exists now so that the first component added is linted
+// on the commit that adds it, not on some later cleanup commit.
+
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  {
+    ignores: [
+      '**/node_modules/**',
+      '**/.next/**',
+      '**/dist/**',
+      '**/.venv/**',
+      'fixtures/synthetic-repo/**',
+    ],
+  },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    rules: {
+      // camelCase is permitted only past the TS boundary, and the conversion
+      // happens in exactly one place: apps/web/lib/api-client.ts (CLAUDE.md).
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/consistent-type-imports': 'error',
+      eqeqeq: ['error', 'always'],
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+    },
+  },
+  {
+    // Build scripts run in Node, not the browser, and reporting to stdout is
+    // their entire job. Declared inline rather than pulling in `globals` for
+    // three names.
+    files: ['scripts/**/*.mjs', 'eslint.config.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly' },
+    },
+    rules: {
+      'no-console': 'off',
+    },
+  },
+);

@@ -1,0 +1,7 @@
+{
+  "name": "@roottrace/shared-types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TypeScript and Python types generated from shared JSON Schemas. Placeholder until the contracts have consumers.",
+  "scripts": {}
+}

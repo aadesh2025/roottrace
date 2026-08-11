@@ -1,0 +1,163 @@
+# RootTrace AI — uv workspace root.
+#
+# This root is not itself a distributable package; it exists to hold the
+# workspace definition and the shared tool configuration so that ruff, mypy,
+# and pytest cannot diverge between apps/ and packages/.
+#
+# Stack is fixed by CLAUDE.md and docs/02 §technology. Do not add a dependency
+# here without checking docs/appendix/A4-ADR-LOG.md first.
+
+[project]
+name = "roottrace"
+version = "0.1.0"
+description = "RootTrace AI — autonomous API error observatory (workspace root)"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+  "apps/api",
+  "apps/worker",
+  "apps/sandbox-runner",
+  "packages/sdk-python",
+]
+
+[tool.uv.sources]
+roottrace-api = { workspace = true }
+roottrace-worker = { workspace = true }
+roottrace-sandbox-runner = { workspace = true }
+roottrace-sdk = { workspace = true }
+
+[dependency-groups]
+# Every workspace member is installed editable into the root venv, so
+# `uv run pytest` sees the whole repo without per-package activation.
+dev = [
+  "roottrace-api",
+  "roottrace-worker",
+  "roottrace-sandbox-runner",
+  "roottrace-sdk",
+  # Exact versions are pinned by uv.lock with hashes (docs/11 A08).
+  # Keep this range in step with the ruff-pre-commit `rev` in
+  # .pre-commit-config.yaml. If the hook and the toolchain resolve to different
+  # ruff versions, `make fmt` and the commit hook can disagree about the same
+  # file and fight each other on every commit.
+  "ruff>=0.16,<0.17",
+  "mypy>=1.18,<2.0",
+  # >=9.0.3: 8.4.2 carries PYSEC-2026-1845, caught by `make audit` on the first
+  # run. The original <9.0 ceiling would have pinned us below the fix.
+  "pytest>=9.0.3,<10.0",
+  "pytest-asyncio>=1.2,<2.0",
+  "pytest-cov>=7.0,<8.0",
+  "pre-commit>=4.4,<5.0",
+  "pip-audit>=2.9,<3.0",
+]
+
+# ── ruff ───────────────────────────────────────────────────────────────────
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [
+  # ruff formats Python inside Markdown fences from 0.16. The specification is
+  # binding and hand-formatted (CLAUDE.md), and its code blocks are contracts —
+  # A3 §6's boot invariants, 04 §12's DDL. A formatter rewriting them produces
+  # a huge diff that hides real contract changes, which is the definition of
+  # documentation drift becoming a defect.
+  "docs",
+  # The fixture repo's flaws are the point. Formatting it would move the very
+  # line numbers the 25 ground-truth cases cite.
+  "fixtures/synthetic-repo",
+]
+
+[tool.ruff.lint]
+select = [
+  "E", "W",    # pycodestyle
+  "F",         # pyflakes
+  "I",         # isort
+  "N",         # pep8-naming — snake_case is a convention in CLAUDE.md
+  "UP",        # pyupgrade
+  "B",         # bugbear
+  "S",         # bandit — untrusted input is a first-class concern here
+  "ASYNC",     # async correctness
+  "C4",        # comprehensions
+  "SIM",       # simplify
+  "TID",       # tidy imports
+  "PTH",       # use pathlib
+  "RUF",
+]
+ignore = [
+  "E501",      # line length is enforced by the formatter, not the linter
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests legitimately assert, use fixtures, and hard-code sample values.
+"**/tests/**" = ["S101", "S105", "S106"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "parents"
+
+[tool.ruff.lint.isort]
+# Without this, our own workspace packages sort as third-party and every file
+# that imports one gets flagged. Add new workspace members here.
+known-first-party = [
+  "roottrace_api",
+  "roottrace_worker",
+  "roottrace_sandbox_runner",
+  "roottrace_sdk",
+]
+
+# ── mypy ───────────────────────────────────────────────────────────────────
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+warn_unused_configs = true
+show_error_codes = true
+# Untyped third-party packages are opted in explicitly rather than blanket
+# ignored, so a missing stub is a visible decision.
+disallow_untyped_defs = true
+exclude = "^fixtures/synthetic-repo/"
+
+# ── pytest ─────────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+# --strict-markers: an unregistered marker is an error, not a silent no-op,
+# so `pytest -m unit` can never quietly select nothing because of a typo.
+addopts = "-q --strict-markers --strict-config"
+testpaths = ["apps", "packages"]
+asyncio_mode = "auto"
+markers = [
+  "unit: pure functions and mocked boundaries (docs/14 §3)",
+  "integration: real Postgres, Redis, containers via testcontainers (docs/14 §4)",
+  "security: RLS, sandbox isolation, injection corpus (docs/14 §7)",
+  "e2e: full stack through Playwright (docs/14 §5)",
+]
+
+# ── coverage ───────────────────────────────────────────────────────────────
+
+[tool.coverage.run]
+branch = true
+source = ["apps", "packages"]
+# __init__.py is deliberately NOT omitted. It is the usual thing to exclude,
+# but package inits hold real exports in this repo, and excluding them here
+# would mean Phase 1 measures literally nothing and reports success.
+omit = ["**/tests/**"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+# Phase 1 measures without enforcing (docs/A3 §6.1). The floor is supplied on
+# the command line by the Makefile via RT_COVERAGE_MIN_OVERALL, which is the
+# ratchet: it may only ever be raised. Never set a floor here — a second source
+# of truth is how a ratchet silently slips.
+fail_under = 0
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "@overload",
+]

@@ -124,6 +124,7 @@ Write all **15** migrations from `04-DATA-MODEL.md` §15, in order. `…000900_a
 - The `rt_auth` helpers exist, are owned by `rt_rls_owner`, and have pinned `search_path`.
 - **Every partition carries its own forced RLS and its own policies (B13).** A test queries `raw_events_2026_08` and `error_occurrences_2026_08` **directly** as `authenticated` from project A and asserts **zero rows** from project B.
 - **The maintenance job cannot reopen the gap.** Running `rt_admin.ensure_partitions()` produces partitions that are already secured; a partition created without `secure_partition()` fails the assertion migration.
+- **The integration CI job exists, is uncommented, and runs on every PR.** T1.1 left it commented out in `.github/workflows/ci.yml` because Phase 1 has no integration suite and `pytest -m integration` exits 5 on an empty selection. The alternative — a flag that tolerates an empty run — was rejected as a permanent escape hatch for a two-week problem. This bullet is what makes it self-correcting rather than remembered.
 
 ### T1.3 RLS and membership security suite
 
@@ -403,7 +404,7 @@ Layout, sidebar, top bar, command palette, design tokens, and the pipeline viewe
 
 Prompt-injection corpus (25 cases), auth/tenancy tests, sandbox isolation checks.
 
-**Accept:** 25/25 injections blocked. All auth tests pass. All 17 isolation checks pass. All 69 controls in the `11` §13 register have a passing test.
+**Accept:** 25/25 injections blocked. All auth tests pass. All 17 isolation checks pass. All 70 controls in the `11` §13 register have a passing test.
 
 ### T10.3 Load testing
 

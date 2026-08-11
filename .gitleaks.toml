@@ -1,0 +1,49 @@
+title = "RootTrace AI — gitleaks"
+
+# Start from the upstream ruleset and add what is specific to us. Never replace
+# it: the default rules cover AWS, GCP, Stripe, Slack, and the providers we do
+# not use today but might tomorrow.
+[extend]
+useDefault = true
+
+# ── RootTrace-specific rules ───────────────────────────────────────────────
+
+[[rules]]
+id = "roottrace-ingest-key"
+description = "RootTrace ingest API key (docs/05 §API keys)"
+# rt_live_ + 32 hex. The full key is returned exactly once and never stored,
+# so a copy in git is the only place one can persist by accident.
+regex = '''\brt_live_[0-9a-f]{32}\b'''
+keywords = ["rt_live_"]
+
+[[rules]]
+id = "supabase-service-role-jwt"
+description = "Supabase service-role key — bypasses RLS entirely (docs/A3 §6)"
+regex = '''\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\b'''
+keywords = ["eyJ"]
+
+# ── Allowlist ──────────────────────────────────────────────────────────────
+#
+# Scoped as narrowly as the rule it excuses. A broad allowlist is worse than a
+# missing rule, because it reports clean.
+
+[allowlist]
+description = "Documented examples and the tracked env template"
+
+paths = [
+  # The ONLY tracked env file (.gitignore rejects every other shape). Its
+  # values are deliberately non-secret-shaped — see the file itself.
+  '''(^|/)\.env\.example$''',
+]
+
+regexes = [
+  # The single example key that appears in docs/05 §2.1 and §API keys, and in
+  # docs/02 §143. Allowlisted by its literal value, not by allowing docs/ —
+  # any OTHER key-shaped string in the specification still fails the scan.
+  '''rt_live_a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5''',
+  '''rt_live_a3f8\b''',
+  # Truncated JWT illustration in docs/05 §2.2.
+  '''eyJhbGciOiJSUzI1NiIs\.\.\.''',
+  # Placeholder values used throughout the template and the docs.
+  '''REPLACE_ME''',
+]
