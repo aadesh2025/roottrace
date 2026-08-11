@@ -75,26 +75,14 @@ as $$
      and d.project_id in (select rt_auth.project_ids())   -- ← the isolation
 $$;
 
--- Owned by the BYPASSRLS role for the same reason as the rt_auth helpers: the
--- accessor must be able to read the underlying view, which authenticated cannot.
+-- These two remain SECURITY DEFINER and keep the migration role as owner. That
+-- is NOT the BYPASSRLS pattern the helpers used to need: a matview carries no
+-- RLS at all (B6 is precisely that it cannot), so the accessor needs only the
+-- SELECT PRIVILEGE that `authenticated` was revoked. It bypasses no policy.
 --
--- Reassigning ownership requires the incoming owner to hold CREATE on the
--- schema, otherwise:
---   ERROR: permission denied for schema public (SQLSTATE 42501)
--- These two accessors are the only objects rt_rls_owner owns in `public`; the
--- rt_auth helpers live in their own schema, which it owns outright. The role is
--- NOLOGIN and only `postgres` can SET ROLE to it.
-grant create on schema public to rt_rls_owner;
-
--- And the accessors must be able to read what they scope. BYPASSRLS is not a
--- table privilege (see 000900); without this the accessor fails with
--- `permission denied` for its own view.
-grant select on issue_hourly_counts, project_health_daily to rt_rls_owner;
-
-alter function public.issue_hourly_counts_for(uuid, timestamptz, timestamptz)
-  owner to rt_rls_owner;
-alter function public.project_health_daily_for(uuid, date, date)
-  owner to rt_rls_owner;
+-- The tenant filter inside still resolves correctly, because rt_auth.uid() reads
+-- the request JWT rather than the executing role — a definer context does not
+-- change whose token is being presented.
 
 revoke execute on function public.issue_hourly_counts_for(uuid, timestamptz, timestamptz)
   from public;

@@ -30,7 +30,11 @@ begin
   return old;
 end $$;
 
-alter function rt_auth.assert_owner_remains() owner to rt_rls_owner;
+-- SECURITY DEFINER and owned by the migration role, which is not subject to the
+-- own-row-only policy. The trigger must count OTHER owners to know one remains,
+-- which is exactly the read the policy forbids — a cardinality rule cannot be
+-- answered from a single row. This is the one place the invariant needs a wider
+-- view than any user has, and it returns a boolean, never rows.
 
 drop trigger if exists org_members_keep_owner on organization_members;
 create trigger org_members_keep_owner

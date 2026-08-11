@@ -80,8 +80,13 @@ alter table organization_members enable row level security;
 alter table organization_members force  row level security;
 
 drop policy if exists org_members_read on organization_members;
+-- OWN ROW ONLY. The co-member clause is deliberately absent: reading other
+-- members' rows from this table's own policy is what forced a BYPASSRLS role in
+-- the previous design, and it raises `infinite recursion detected in policy`
+-- when written inline. V1 has no way to add a second member (invites are V2),
+-- so one row IS the roster. See ADR-009.
 create policy org_members_read on organization_members for select
-  using (user_id = rt_auth.uid() or organization_id in (select rt_auth.org_ids()));
+  using (user_id = rt_auth.uid());
 
 -- Writes are gated on is_org_owner — deliberately narrower than write authority.
 drop policy if exists org_members_insert on organization_members;
@@ -123,8 +128,9 @@ alter table project_members enable row level security;
 alter table project_members force  row level security;
 
 drop policy if exists project_members_read on project_members;
+-- Own row only, for the same reason as organization_members above.
 create policy project_members_read on project_members for select
-  using (user_id = rt_auth.uid() or project_id in (select rt_auth.project_ids()));
+  using (user_id = rt_auth.uid());
 
 drop policy if exists project_members_insert on project_members;
 create policy project_members_insert on project_members for insert
@@ -145,14 +151,45 @@ create policy project_members_delete on project_members for delete
 alter table projects enable row level security;
 alter table projects force  row level security;
 
+-- ── The one place a helper must NOT be used ─────────────────────────────────
+-- `projects` is where every cycle closes, because rt_auth.project_ids() and
+-- can_write_project() both read it. Two rules keep it terminating, and removing
+-- either one reintroduces B2 without a BYPASSRLS role to hide it:
+--
+--   1. The READ policy is INLINE. If it called project_ids(), that function's
+--      own read of `projects` would re-enter this policy: `stack depth limit
+--      exceeded`. Inline, it reads only the two membership tables, whose
+--      policies are own-row-only and terminate immediately.
+--
+--   2. The WRITE policies are NOT `for all`. A `for all` policy's USING clause
+--      is evaluated on SELECT as well, so `for all using can_write_project(id)`
+--      makes every read of `projects` call a function that reads `projects`.
+--      That is the exact recursion the first `db reset` of this design hit.
+--
+-- Everything downstream is safe: the 20 generic tables may call the helpers
+-- freely, because none of them is read by a helper.
 drop policy if exists projects_read on projects;
 create policy projects_read on projects for select
-  using (id in (select rt_auth.project_ids()));
+  using (
+       id in (select pm.project_id from project_members pm
+               where pm.user_id = rt_auth.uid())
+    or organization_id in (select om.organization_id from organization_members om
+                            where om.user_id = rt_auth.uid())
+  );
 
 drop policy if exists projects_write on projects;
-create policy projects_write on projects for all
+drop policy if exists projects_insert on projects;
+create policy projects_insert on projects for insert
+  with check (rt_auth.can_write_project(id));
+
+drop policy if exists projects_update on projects;
+create policy projects_update on projects for update
   using      (rt_auth.can_write_project(id))
   with check (rt_auth.can_write_project(id));
+
+drop policy if exists projects_delete on projects;
+create policy projects_delete on projects for delete
+  using (rt_auth.can_write_project(id));
 
 -- ── audit_log: dual-scope (B5) ──────────────────────────────────────────────
 -- No row may be unattributable to a tenant.

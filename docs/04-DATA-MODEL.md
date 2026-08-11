@@ -868,31 +868,21 @@ This must be stated correctly, because getting it wrong is what produced blocker
 | `FORCE` exempts `SECURITY DEFINER` functions | **No.** `FORCE` exempts nothing. A `SECURITY DEFINER` function is still subject to RLS |
 | Something must be able to bypass RLS | Yes — and the *only* thing that does is a role holding **`BYPASSRLS`** |
 
-So a `SECURITY DEFINER` helper bypasses RLS **if and only if its owner holds `BYPASSRLS`.** That single fact is the mechanism the whole model below depends on, and the reason the previous design deadlocked: `auth_project_ids()` read `projects`, whose policy called `auth_project_ids()`, and `SECURITY DEFINER` did not break the cycle.
+So a `SECURITY DEFINER` helper bypasses RLS **if and only if its owner holds `BYPASSRLS`.** That single fact is why the original design deadlocked: `auth_project_ids()` read `projects`, whose policy called `auth_project_ids()`, and `SECURITY DEFINER` did not break the cycle. The model below does not rely on that mechanism at all — it removes the cycle instead of privileging its way out (ADR-009).
 
 ### 12.2 The `rt_auth` helper schema
 
-Owned by `rt_rls_owner`, a role created solely to hold `BYPASSRLS`. It owns nothing else and cannot log in.
+**No privileged role.** The six helpers are plain `stable` SQL functions — *not* `SECURITY DEFINER` — executing as the caller under the caller's own policies. Nothing in this system holds `BYPASSRLS` except Supabase's own `service_role`, which the workers use (ADR-009, Option B).
+
+That works because every helper asks a question about the **caller** — which projects am I in, may I write here, am I an owner — and all of them are answerable from the caller's own rows. The membership policies are therefore `user_id = rt_auth.uid()`, with no subquery to recurse into.
 
 ```sql
-create role rt_rls_owner nologin bypassrls;
-
--- Migrations run as `postgres`, which on Supabase is NOT a superuser. Creating a
--- schema owned by another role — and reassigning function ownership to it —
--- requires membership: otherwise `must be able to SET ROLE "rt_rls_owner"`.
-grant rt_rls_owner to current_user;
-
-create schema if not exists rt_auth authorization rt_rls_owner;
+create schema if not exists rt_auth;
 revoke all on schema rt_auth from public;
 grant usage on schema rt_auth to authenticated;
-
--- BYPASSRLS exempts a role from POLICIES. It confers NO table privileges, so the
--- owner needs explicit read on everything its helpers touch, and nothing more.
-grant select on public.organization_members, public.project_members, public.projects
-  to rt_rls_owner;
 ```
 
-**`rt_auth.uid()`, not `auth.uid()`.** The helpers are `SECURITY DEFINER` and so execute as `rt_rls_owner`, which holds no `USAGE` on the `auth` schema — every policy in the system then fails at *query* time with `permission denied for schema auth`. The obvious repair does not work: `grant usage on schema auth to rt_rls_owner` run as `postgres` emits `WARNING: no privileges were granted`, because the schema belongs to `supabase_admin`. A warning does not fail a migration, so the fix appears to apply and does nothing. `auth.uid()` is itself a one-line read of the request JWT, so we read it directly and depend on no other schema:
+**`rt_auth.uid()`, not `auth.uid()`.** Discovered while the helpers were still `SECURITY DEFINER`: a definer function cannot reach the `auth` schema unless its owner has `USAGE`, and `grant usage on schema auth` run as `postgres` emits `WARNING: no privileges were granted` — the schema belongs to `supabase_admin`. A warning does not fail a migration, so the fix appears to apply and does nothing. Retained after the helpers became plain functions, because it removes a cross-schema dependency for a value that is one line of `current_setting`:
 
 ```sql
 create or replace function rt_auth.uid() returns uuid
@@ -903,7 +893,7 @@ as $$
 $$;
 ```
 
-Every helper and every policy below uses this one definition. It must be owned by `rt_rls_owner` as well — the blanket `revoke execute … from public` would otherwise leave the helpers unable to call it.
+Every helper and every policy below uses this one definition.
 
 > Each of these three was found by a migration failing loudly on the first `supabase db reset`, which is the intended behaviour and the reason the assertions run at all. None of them was visible from the specification.
 
@@ -978,12 +968,6 @@ $$;
 Every helper is then locked down:
 
 ```sql
-alter function rt_auth.org_ids()                    owner to rt_rls_owner;
-alter function rt_auth.project_ids()                owner to rt_rls_owner;
-alter function rt_auth.can_write_project(uuid)      owner to rt_rls_owner;
-alter function rt_auth.is_project_admin(uuid)       owner to rt_rls_owner;
-alter function rt_auth.is_org_owner(uuid)           owner to rt_rls_owner;
-
 revoke execute on all functions in schema rt_auth from public;
 grant  execute on all functions in schema rt_auth to authenticated;
 ```
@@ -991,22 +975,33 @@ grant  execute on all functions in schema rt_auth to authenticated;
 **Why this is not an escalation path.** Four properties, each independently checked by a test:
 
 1. **No helper accepts a user identifier.** Every one derives identity from `auth.uid()` internally. There is no way to ask "what can *someone else* see" — the API surface simply does not express it.
-2. **`search_path` is pinned** on every function, so a caller cannot shadow `public.project_members` with a temp table and trick a `BYPASSRLS` function into reading attacker-controlled rows.
+2. **`search_path` is pinned** on every function, so a caller cannot shadow `public.project_members` with a temp table and feed a helper attacker-controlled rows.
 3. **`EXECUTE` is revoked from `PUBLIC`** and granted only to `authenticated`. `anon` cannot call them at all.
-4. **The owner role has no login and owns nothing else.** Compromising it requires already having superuser.
+4. **None of them is `SECURITY DEFINER`.** No helper runs with authority the caller does not already hold, which is the strongest form of this constraint rather than an approximation of it. The only `SECURITY DEFINER` object left is the last-owner trigger (§12.5), which answers a cardinality question no single row can and returns a boolean, never rows.
 
 ### 12.3 Non-recursion argument (B2)
 
-The cycle is broken structurally, not by convention:
+Termination comes from the shape of the graph, not from a role that opts out of it:
 
 ```
-policy on projects           → rt_auth.project_ids()   [BYPASSRLS] → reads tables with RLS NOT applied → terminates
-policy on project_members    → rt_auth.project_ids()   [BYPASSRLS] → terminates
-policy on organization_members → rt_auth.org_ids()     [BYPASSRLS] → terminates
-policy on every other tenant table → rt_auth.project_ids() [BYPASSRLS] → terminates
+policy on project_members      → user_id = rt_auth.uid()          → terminates immediately
+policy on organization_members → user_id = rt_auth.uid()          → terminates immediately
+policy on projects  (SELECT)   → INLINE reads of the two above    → terminates in one hop
+policy on projects  (write)    → can_write_project() → projects → INLINE policy → terminates
+policy on organizations        → rt_auth.org_ids() → org_members → terminates
+every other tenant table       → rt_auth.project_ids() → members + projects → terminates
 ```
 
-No policy body references its own table, and no helper is subject to a policy. **A policy may never contain a self-referential subquery** — that rule is what the membership policies below exist to honour, and it is checked in review.
+Two rules keep `projects` terminating, and **both were found by a `db reset` failing, not by reading the graph**:
+
+| Rule | What breaks without it |
+|---|---|
+| `projects`' SELECT policy is **inline**, never `project_ids()` | That helper reads `projects`, so the policy re-enters itself: `stack depth limit exceeded` |
+| `projects`' write policies are **per-command**, never `for all` | A `for all` policy's `USING` is evaluated on `SELECT` too, so every read of `projects` calls a function that reads `projects` |
+
+`projects` is the only table under this constraint, because it is the only one a helper reads. The 20 generic tables may call the helpers freely.
+
+**A policy may never contain a self-referential subquery**, and no helper may read a table whose policy calls that helper. Both are checked in review and by the architecture regression tests in `14` §4.1a.
 
 ### 12.4 Identity tables — bespoke policies
 
@@ -1408,10 +1403,9 @@ as $$
      and d.project_id in (select rt_auth.project_ids())   -- ← the isolation
 $$;
 
-alter function public.issue_hourly_counts_for(uuid, timestamptz, timestamptz)
-  owner to rt_rls_owner;
-alter function public.project_health_daily_for(uuid, date, date)
-  owner to rt_rls_owner;
+-- SECURITY DEFINER here bypasses no policy: a matview carries no RLS at all
+-- (that is B6). These need only the SELECT privilege `authenticated` was
+-- revoked, so they keep the migration role as owner.
 revoke execute on function public.issue_hourly_counts_for(uuid, timestamptz, timestamptz) from public;
 revoke execute on function public.project_health_daily_for(uuid, date, date) from public;
 grant  execute on function public.issue_hourly_counts_for(uuid, timestamptz, timestamptz) to authenticated;
@@ -1460,7 +1454,7 @@ infra/supabase/migrations/
 ├─ 20260801000600_artifacts.sql
 ├─ 20260801000700_delivery_feedback.sql
 ├─ 20260801000800_platform.sql
-├─ 20260801000900_auth_helpers.sql          ← rt_rls_owner, rt_auth schema + helpers (§12.2)
+├─ 20260801000900_auth_helpers.sql          ← rt_auth schema + 6 plain helpers (§12.2)
 ├─ 20260801001000_rls_policies.sql          ← bespoke + generic policies (§12.4–12.8)
 ├─ 20260801001100_membership_triggers.sql   ← last-owner invariant (§12.5)
 ├─ 20260801001200_partition_security.sql    ← rt_admin.secure_partition + ensure_partitions (§12.10)

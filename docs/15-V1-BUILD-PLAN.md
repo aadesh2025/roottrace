@@ -121,7 +121,7 @@ Write all **15** migrations from `04-DATA-MODEL.md` §15, in order. `…000900_a
 - `supabase db diff` is empty.
 - All **26** logical tenant tables have RLS enabled **and forced**, verified by the §12.9 coverage assertion, which fails the *migration* rather than a test.
 - The policy-presence assertion passes — no relation is RLS-enabled with zero policies.
-- The `rt_auth` helpers exist, are owned by `rt_rls_owner`, and have pinned `search_path`.
+- The `rt_auth` helpers exist, are **not** `SECURITY DEFINER`, and have pinned `search_path`. No role in the database holds `BYPASSRLS` (ADR-009).
 - **Every partition carries its own forced RLS and its own policies (B13).** A test queries `raw_events_2026_08` and `error_occurrences_2026_08` **directly** as `authenticated` from project A and asserts **zero rows** from project B.
 - **The maintenance job cannot reopen the gap.** Running `rt_admin.ensure_partitions()` produces partitions that are already secured; a partition created without `secure_partition()` fails the assertion migration.
 - **The integration CI job exists, is uncommented, and runs on every PR.** T1.1 left it commented out in `.github/workflows/ci.yml` because Phase 1 has no integration suite and `pytest -m integration` exits 5 on an empty selection. The alternative — a flag that tolerates an empty run — was rejected as a permanent escape hatch for a two-week problem. This bullet is what makes it self-correcting rather than remembered.

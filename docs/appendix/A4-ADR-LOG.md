@@ -274,70 +274,53 @@ Underlying all three was a factual error: the belief that `FORCE ROW LEVEL SECUR
 |---|---|
 | A — Drop `FORCE`, rely on owner exemption | Rejected. `FORCE` is what stops the application role bypassing RLS; removing it defeats `ADR-003`'s entire justification for Supabase |
 | B — Non-recursive policies only, no helpers | Rejected. "See co-members of my org" is inherently self-referential on `organization_members`; expressing it without a bypassing helper is not possible |
-| C — **`SECURITY DEFINER` helpers owned by a `BYPASSRLS` role** | Accepted |
+| C — `SECURITY DEFINER` helpers owned by a `BYPASSRLS` role | Superseded — see the revision below |
+| B — **Non-recursive policies only, no privileged role** | **Accepted, 2026-08-11**, after measurement |
 
-### Decision
+### Decision (revised 2026-08-11 — supersedes C)
 
-A dedicated `rt_auth` schema owned by `rt_rls_owner` — a `NOLOGIN` role created solely to hold `BYPASSRLS`. Five helpers resolve the caller's authorization set. Because RLS is not applied inside them, every policy that calls one terminates in a single hop.
+**Option B, taken.** No `BYPASSRLS`. No `rt_rls_owner`. An `rt_auth` schema of six **plain** helpers — `stable`, not `SECURITY DEFINER`, executing as the caller under the caller's own policies.
+
+B was originally rejected on the grounds that "see co-members of my org" is inherently self-referential and cannot be expressed without a bypassing helper. That reasoning is correct and the conclusion still does not follow, because **V1 has no co-member case at all**: team invites are V2, so a project has exactly one member. Own-row-only membership policies therefore show the complete roster. The capability is not reduced; the privileged role was simply not needed to deliver it.
+
+Every helper asks a question about the *caller* — which projects am I in, may I write here, am I an owner — and all of them are answerable from the caller's own rows.
+
+**Two rules make it terminate, both discovered by a failing `db reset` rather than by reasoning:**
+
+1. **`projects`' read policy is inline**, never `project_ids()`. That helper reads `projects`, so a policy calling it re-enters itself: `stack depth limit exceeded`.
+2. **`projects`' write policies are per-command, never `for all`.** A `for all` policy's `USING` is evaluated on `SELECT` too, so `for all using can_write_project(id)` makes every read of `projects` call a function that reads `projects`.
+
+Everything downstream is unaffected: the 20 generic tables call the helpers freely, because no helper reads them.
+
+Twenty tables share a generic project-scoped policy; six (`projects`, `organizations`, `organization_members`, `github_installations`, `project_members`, `audit_log`) get bespoke policies because they are keyed on something other than `project_id`.
 
 Twenty tables share a generic project-scoped policy; six (`projects`, `organizations`, `organization_members`, `github_installations`, `project_members`, `audit_log`) get bespoke policies because they are keyed on something other than `project_id`.
 
 ### Consequences
 
-- A privileged surface now exists, so it is constrained: no helper accepts a user identifier, every one pins `search_path`, `EXECUTE` is revoked from `PUBLIC`, and the owner cannot log in.
+- **No privileged surface exists.** No helper is `SECURITY DEFINER`, so none runs with authority the caller does not already hold — the strongest form of the constraint the previous design could only approximate. No helper accepts a user identifier, every one pins `search_path`, and `EXECUTE` is revoked from `PUBLIC`.
+- **Co-member visibility is gone until V2.** A user sees their own membership row and no other. This is invisible in V1 (one member per project) and must be restored alongside team invites — at which point the roster needs either a `BYPASSRLS`-owned accessor or a dedicated read path. **Whoever ships invites owns that decision**; adding a second member without it produces a roster that silently shows one row.
+- The last-owner trigger is the single remaining `SECURITY DEFINER` object, because a cardinality rule cannot be answered from one row. It returns a boolean, never rows.
+- The two matview accessors stay `SECURITY DEFINER` for an unrelated reason: a matview carries no RLS at all (B6), so they need the `SELECT` privilege `authenticated` was revoked, and bypass no policy.
 - Membership writes are **owner-only** — narrower than data writes — so maintainer self-promotion is an absent capability rather than a policy edge case.
 - A cardinality rule (`at least one owner`) cannot be expressed in RLS and needs a trigger.
 - Four architecture regression tests guard the design itself, because B2 and B4 arose from plausible-looking code that no functional test would have caught.
 
-### Option B, re-examined empirically during T1.2
+### How Option B was verified
 
-Option B was rejected above on reasoning. It was retested against a real database
-before writing the migrations, because eliminating `BYPASSRLS` entirely would
-remove the only global RLS bypass in our system apart from Supabase's own
-`service_role`. The proposal: have `project_ids()` read only the membership
-tables, and write the policies on `projects` and the two membership tables inline
-so no helper is involved.
-
-**Measured result — the boundary is sharper than "not possible".**
+Measured against a real database before adopting, because the reasoning that
+originally rejected it was sound and only the *scope* had changed.
 
 | Variant | Outcome |
 |---|---|
 | Membership policy with an inline co-member clause referencing its own table | `ERROR: infinite recursion detected in policy for relation` |
 | Same clause routed through `projects`, so the recursion is mutual rather than direct | Same error — PostgreSQL detects it across relations |
-| Membership policy restricted to **own rows only**, with `projects` and the 20 generic tables inline-reading it | **Works.** Correct isolation, no privileged role |
+| `projects` read policy calling `project_ids()` | `ERROR: stack depth limit exceeded` |
+| **Own-row-only membership, inline `projects` read, per-command `projects` writes** | **Clean.** All 21 inline tables pass; cross-tenant reads return zero with a positive control proving own rows are visible |
 
-So `BYPASSRLS` is not required for 21 of the 26 tables. It is required for exactly
-one capability: **seeing co-members** on `project_members` and
-`organization_members`. Dropping that capability would eliminate the privileged
-role outright, at the cost of a user being unable to see who else belongs to their
-project or organization.
-
-That is a product decision, not an implementation one, so the design stands.
-Recorded here because the trade is now measured rather than assumed, and because
-if team management stays out of scope the exchange may be worth making later.
-
-### Known limitation — hosted Supabase
-
-`create role … bypassrls` requires the executing role to hold `BYPASSRLS` itself;
-a plain `CREATEROLE` role cannot grant the attribute. Supabase's `postgres` role
-holds both locally, and the migration applies cleanly, but this has **not** been
-verified against a hosted project. If it fails there, the mitigation is the
-own-row-only membership variant measured above, which needs no privileged role at
-all.
-
-Three adjacent facts, each found by a migration failing loudly at T1.2 and each
-absent from `04` §12.2 as written:
-
-- `postgres` is **not** a superuser on Supabase and must be granted membership in
-  `rt_rls_owner` before it can create a schema owned by it, or reassign
-  ownership to it.
-- `BYPASSRLS` exempts a role from **policies only**. It confers no table
-  privileges, so the owner role needs explicit `SELECT` on the three tables its
-  helpers read.
-- The helpers cannot call `auth.uid()`: they run as `rt_rls_owner`, which has no
-  `USAGE` on the `auth` schema, and `postgres` cannot grant it — the attempt
-  emits a `WARNING`, not an error, so it appears to work. `rt_auth.uid()` reads
-  the request JWT directly instead.
+The full T1.2 acceptance run was repeated against the simplified policy set: 15
+migrations from empty, 26 logical tables with forced RLS, 10 secured partitions,
+zero `BYPASSRLS` roles.
 
 ### Revisit if
 

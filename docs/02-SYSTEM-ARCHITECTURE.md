@@ -258,7 +258,7 @@ create policy tenant_write on investigations for all
               and rt_auth.can_write_project(project_id));
 ```
 
-`rt_auth.project_ids()` is a `SECURITY DEFINER` helper owned by a role holding `BYPASSRLS`. That ownership is what prevents the policy from recursing when it resolves membership — the full model, including the identity tables that need bespoke policies, is in `04` §12.
+`rt_auth.project_ids()` is a plain `stable` helper running as the caller. Recursion is prevented by the shape of the policies rather than by privilege: membership policies are own-row-only, and `projects` reads them inline. The full model, including the identity tables that need bespoke policies, is in `04` §12.
 
 Workers use a service role, but every worker query still passes `project_id` explicitly and is covered by a test asserting cross-tenant reads return zero rows.
 

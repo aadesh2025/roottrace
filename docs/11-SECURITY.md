@@ -92,16 +92,18 @@ Three layers, each independently sufficient for its class of failure:
 
 **Layer 1 — Postgres RLS.** All **26** tenant tables have `enable row level security` plus `force row level security`. The application role cannot bypass it. See `04` §12 for the full model.
 
-> **Correction (C12).** Earlier text claimed that under `FORCE ROW LEVEL SECURITY` "only explicit `security definer` functions and migrations" bypass RLS. **That is false**, and believing it is what produced blockers B1, B2, and B4. `FORCE` exempts *nothing*. A `SECURITY DEFINER` function is still subject to RLS **unless its owner holds `BYPASSRLS`**. The `rt_auth` helpers are owned by `rt_rls_owner` precisely to hold that privilege, and that ownership — not the `SECURITY DEFINER` marker — is what makes the tenancy model terminate instead of recursing.
+> **Correction (C12).** Earlier text claimed that under `FORCE ROW LEVEL SECURITY` "only explicit `security definer` functions and migrations" bypass RLS. **That is false**, and believing it is what produced blockers B1, B2, and B4. `FORCE` exempts *nothing*. A `SECURITY DEFINER` function is still subject to RLS **unless its owner holds `BYPASSRLS`**. That fact is why the original `SECURITY DEFINER` design deadlocked. The model does **not** rely on the exemption: `rt_auth`'s helpers are plain `stable` functions running as the caller, and termination comes from own-row-only membership policies plus an inline `projects` read (ADR-009, Option B).
 
-**Layer 1a — the `rt_auth` helper surface.** Because those helpers hold `BYPASSRLS`, they are a privileged surface and are constrained accordingly:
+**Layer 1a — the `rt_auth` helper surface.** These helpers hold no privilege at all, which is the strongest available control. What remains is constrained anyway, because the *shape* of the helpers is what keeps the model non-recursive:
 
 | Control | Enforcement | Test |
 |---|---|---|
-| No helper accepts a user identifier | Signature review; every helper derives identity from `auth.uid()` | `test_no_helper_takes_user_id` inspects `pg_proc` argument types |
+| No helper accepts a user identifier | Signature review; every helper derives identity from `rt_auth.uid()` | `test_no_helper_takes_user_id` inspects `pg_proc` argument types |
 | `search_path` pinned on every helper | `set search_path = pg_catalog, public` in the definition | `test_all_definer_functions_pin_search_path` queries `pg_proc.proconfig` |
 | `EXECUTE` revoked from `PUBLIC` | Migration `…000900` | `test_anon_cannot_execute_rt_auth` |
-| Owner cannot log in and owns nothing else | `create role rt_rls_owner nologin bypassrls` | `test_rt_rls_owner_owns_only_rt_auth` |
+| **No role holds `BYPASSRLS`** | No such role is created; the workers' `service_role` is Supabase's own | `test_no_bypassrls_role_exists` queries `pg_roles` |
+| No `rt_auth` helper is `SECURITY DEFINER` | Plain `stable` functions | `test_no_rt_auth_helper_is_definer` queries `pg_proc.prosecdef` |
+| `projects`' write policies are per-command, never `for all` | Migration `…001000` | `test_projects_write_policies_are_per_command` — a `for all` policy recurses on SELECT |
 | No policy contains a self-referential subquery | Review rule + `test_no_policy_references_own_table` parses `pg_policy` | automated |
 
 **Layer 1b — membership integrity (B4).** Membership tables are the escalation surface: whoever can write `project_members` can grant themselves anything. Writes are therefore gated on `is_project_admin` / `is_org_owner` — **owner only**, strictly narrower than the `can_write_project` used for data tables. A maintainer has no write path to a membership table at all, so self-promotion is not a policy edge case but an absent capability.

@@ -467,7 +467,7 @@ Micro-USD by day, by stage, by model. Token breakdown. Cost per investigation tr
 | Repositories | Connected repos, index status, **path-mapping tester** (`05` §6.6 — the fastest way to debug an integration), monorepo config |
 | API keys | Create (reveal-once modal with copy + explicit warning), list with prefix and last-used, rotate, revoke |
 | AI | Model tier overrides, confidence floor for PR, auto-merge policy (off by default, with a clear explanation of the risk), cost caps |
-| Members | Invite, role management, remove |
+| Members | You (owner) — invite and role management ship in V2 |
 | Audit | Filterable immutable action log |
 
 The API key reveal modal is worth specifying precisely: full key in a monospace field, a prominent copy button, a plain-language warning that it will not be shown again, and a checkbox the user must tick to dismiss. Keys lost at creation are a common, entirely avoidable support burden.

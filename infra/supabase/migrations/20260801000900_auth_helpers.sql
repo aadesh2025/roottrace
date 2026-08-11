@@ -1,60 +1,51 @@
--- 000900 — rt_rls_owner, the rt_auth schema, and the five authorization helpers.
+-- 000900 — the rt_auth schema and the six authorization helpers.
 --
 -- docs/04-DATA-MODEL.md §12.2, ADR-009. Must precede 001000: every policy there
 -- references rt_auth.*, and PostgreSQL resolves those references at CREATE
 -- POLICY time.
 --
--- ── Why a dedicated role exists (B2) ────────────────────────────────────────
--- SECURITY DEFINER does NOT bypass RLS. Only a role holding BYPASSRLS does
--- (C12 corrected the opposite claim). The original design deadlocked on exactly
--- this: auth_project_ids() read `projects`, whose policy called
--- auth_project_ids(), and SECURITY DEFINER did not break the cycle.
+-- ═══════════════════════════════════════════════════════════════════════════
+-- NO BYPASSRLS. NO PRIVILEGED ROLE. (ADR-009, Option B — taken)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The original design gave these helpers SECURITY DEFINER and owned them with
+-- `rt_rls_owner`, a role created solely to hold BYPASSRLS, because B2's cycle
+-- was real: project_ids() read `projects`, whose policy called project_ids().
 --
--- rt_rls_owner exists solely to hold BYPASSRLS. It cannot log in and owns
--- nothing except these functions.
+-- The cycle only exists if a membership policy has to read OTHER people's
+-- membership rows. It does not:
+--
+--   * Every helper below asks a question about the CALLER — which projects am I
+--     in, may I write here, am I an owner. All of them are answerable from the
+--     caller's own rows.
+--   * The membership policies are therefore `user_id = rt_auth.uid()`: own row
+--     only, no subquery, nothing to recurse into.
+--   * `projects`, `organizations` and the 20 generic tables read the membership
+--     tables under that policy, which terminates in one hop.
+--
+-- Measured before adopting (ADR-009): an inline co-member clause raises
+-- `infinite recursion detected in policy`, directly and mutually; own-row-only
+-- passes clean across all 21 inline tables.
+--
+-- What we give up is co-member visibility — seeing who ELSE is on your project.
+-- V1 has no way to add a second member (team invites are V2), so a project has
+-- exactly one member and own-row-only shows the complete roster. The capability
+-- is not reduced; the privileged role is simply not needed to deliver it.
+--
+-- Consequently these are PLAIN functions: stable, not SECURITY DEFINER, owned by
+-- nobody special, executing as the caller under the caller's own policies.
 
-do $$ begin
-  create role rt_rls_owner nologin bypassrls;
-exception when duplicate_object then null; end $$;
-
--- Migrations run as `postgres`, which on Supabase is NOT a superuser. Creating a
--- schema owned by another role, and reassigning function ownership below, both
--- require membership in that role:
---   ERROR: must be able to SET ROLE "rt_rls_owner" (SQLSTATE 42501)
--- PostgreSQL 16+ grants the creating role ADMIN OPTION automatically, so this
--- succeeds for whoever ran the CREATE ROLE above.
-do $$ begin
-  execute format('grant rt_rls_owner to %I', current_user);
-end $$;
-
-create schema if not exists rt_auth authorization rt_rls_owner;
+create schema if not exists rt_auth;
 revoke all on schema rt_auth from public;
 grant usage on schema rt_auth to authenticated;
 
--- ── Why rt_auth.uid() exists instead of auth.uid() (deviation from `04` §12.2)
+-- The caller's identity, read straight from the request JWT.
 --
--- The helpers below are SECURITY DEFINER and therefore execute as rt_rls_owner.
--- `04` §12.2 has them call auth.uid(), but rt_rls_owner has no USAGE on the
--- `auth` schema, so every policy in the system fails at QUERY time with
---   ERROR: permission denied for schema auth
---
--- The obvious repair does not work: `grant usage on schema auth to rt_rls_owner`
--- run as `postgres` emits `WARNING: no privileges were granted for "auth"` and
--- changes nothing, because the schema is owned by supabase_admin and postgres
--- holds no grant option on it. A WARNING does not fail a migration — so the fix
--- appears to apply, and does nothing. Hosted Supabase is more restrictive, not
--- less, so this would not have behaved differently there.
---
--- auth.uid() is itself a one-line read of the request JWT, so we read it
--- directly and depend on no other schema. Everything that needs the caller's
--- identity now uses this single definition, including the two membership
--- policies in 001000 that `04` §12.4 writes as auth.uid().
---
--- Worth recording how this was caught: both coverage assertions passed, because
--- they check STRUCTURE — RLS enabled, forced, policy present — not that a policy
--- can be evaluated. Only the positive-control read found it. A purely negative
--- isolation suite cannot: "user A sees zero of B's rows" is equally true when
--- nothing works at all.
+-- Not auth.uid(): that lives in the `auth` schema, and a function that needed
+-- USAGE there could not be granted it — `grant usage on schema auth` run as
+-- `postgres` emits `WARNING: no privileges were granted`, because the schema
+-- belongs to supabase_admin. A warning does not fail a migration, so the fix
+-- appears to apply and does nothing. auth.uid() is itself a one-line read of
+-- the same claim, so we read it directly and depend on no other schema.
 create or replace function rt_auth.uid() returns uuid
 language sql stable
 set search_path = pg_catalog
@@ -62,9 +53,9 @@ as $$
   select nullif(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid
 $$;
 
--- Organizations the caller belongs to.
+-- Organizations the caller belongs to. Reads only the caller's own rows.
 create or replace function rt_auth.org_ids() returns setof uuid
-language sql stable security definer
+language sql stable
 set search_path = pg_catalog, public          -- pinned: defeats search_path injection
 as $$
   select om.organization_id
@@ -72,9 +63,11 @@ as $$
    where om.user_id = rt_auth.uid()
 $$;
 
--- Projects the caller can see: direct membership, or membership of the owning org.
+-- Projects the caller can see: direct membership, or membership of the owning
+-- org. The read of `projects` is itself filtered by projects' own policy, which
+-- reads only membership rows — one hop, no cycle.
 create or replace function rt_auth.project_ids() returns setof uuid
-language sql stable security definer
+language sql stable
 set search_path = pg_catalog, public
 as $$
   select pm.project_id
@@ -91,7 +84,7 @@ $$;
 
 -- Write authority on a project: project owner/maintainer, or org owner/maintainer.
 create or replace function rt_auth.can_write_project(pid uuid) returns boolean
-language sql stable security definer
+language sql stable
 set search_path = pg_catalog, public
 as $$
   select exists (select 1 from public.project_members pm
@@ -108,7 +101,7 @@ $$;
 -- and that gap is what makes "maintainer promotes self to owner" an absent
 -- capability rather than a policy nuance (B4).
 create or replace function rt_auth.is_project_admin(pid uuid) returns boolean
-language sql stable security definer
+language sql stable
 set search_path = pg_catalog, public
 as $$
   select exists (select 1 from public.project_members pm
@@ -122,7 +115,7 @@ as $$
 $$;
 
 create or replace function rt_auth.is_org_owner(oid uuid) returns boolean
-language sql stable security definer
+language sql stable
 set search_path = pg_catalog, public
 as $$
   select exists (select 1 from public.organization_members om
@@ -130,39 +123,17 @@ as $$
                     and om.role = 'owner')
 $$;
 
--- Ownership is what actually confers the bypass — the functions must be owned by
--- the BYPASSRLS role, not merely declared SECURITY DEFINER.
--- rt_auth.uid() included: the five helpers call it while running AS
--- rt_rls_owner, and the blanket `revoke execute ... from public` below would
--- otherwise leave that role unable to execute it —
---   ERROR: permission denied for function uid
--- A function's owner always retains EXECUTE, so ownership is the fix rather
--- than another grant to maintain.
-alter function rt_auth.uid()                   owner to rt_rls_owner;
-alter function rt_auth.org_ids()               owner to rt_rls_owner;
-alter function rt_auth.project_ids()           owner to rt_rls_owner;
-alter function rt_auth.can_write_project(uuid) owner to rt_rls_owner;
-alter function rt_auth.is_project_admin(uuid)  owner to rt_rls_owner;
-alter function rt_auth.is_org_owner(uuid)      owner to rt_rls_owner;
-
--- BYPASSRLS exempts a role from POLICIES. It confers no table privileges
--- whatsoever, and `04` §12.2 does not mention the difference:
---   ERROR: permission denied for table project_members
--- These three tables are everything the helpers read, and read is all they get.
-grant select on public.organization_members, public.project_members, public.projects
-  to rt_rls_owner;
-
 -- anon cannot call these at all.
 revoke execute on all functions in schema rt_auth from public;
 grant  execute on all functions in schema rt_auth to authenticated;
 
--- Four properties make this not an escalation path, each checked by a test in
--- T1.3:
+-- Properties that keep this from being an escalation path, each checked in T1.3:
 --   1. No helper accepts a user identifier. Every one derives identity from
---      rt_auth.uid() internally, so "what can someone else see" is not expressible.
+--      rt_auth.uid(), so "what can someone else see" is not expressible.
 --   2. search_path is pinned on every function, so a caller cannot shadow
---      public.project_members with a temp table and feed attacker-controlled
---      rows to a BYPASSRLS function.
+--      public.project_members with a temp table.
 --   3. EXECUTE is revoked from PUBLIC and granted only to authenticated.
---   4. The owner role has no login and owns nothing else; compromising it
---      requires already being superuser.
+--   4. None of them is SECURITY DEFINER, so none runs with privileges the
+--      caller does not already hold. This is the property the previous design
+--      could not offer, and it is why the four regression guards in `14` §4.1a
+--      matter less than they used to.

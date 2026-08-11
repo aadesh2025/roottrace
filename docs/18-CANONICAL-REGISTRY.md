@@ -119,9 +119,9 @@ By scope: 3 organization-scoped, 22 project-scoped, 1 dual-scope (`audit_log`).
 
 **Partitions are separate relations and inherit nothing.** Each carries its own forced RLS and its own copy of the parent's policies, applied by `rt_admin.secure_partition()` at creation. The 26 count is *logical tables*; the true count of RLS-protected relations is 26 + one per live partition, and grows monthly. See `04` §12.10 (B13).
 
-Authorization helpers live in schema `rt_auth`, owned by `rt_rls_owner` (`NOLOGIN`, `BYPASSRLS`): `uid()`, `org_ids()`, `project_ids()`, `can_write_project(uuid)`, `is_project_admin(uuid)`, `is_org_owner(uuid)`.
+Authorization helpers live in schema `rt_auth` and are **plain `stable` functions, not `SECURITY DEFINER`**: `uid()`, `org_ids()`, `project_ids()`, `can_write_project(uuid)`, `is_project_admin(uuid)`, `is_org_owner(uuid)`. **Nothing in this system holds `BYPASSRLS`** except Supabase's own `service_role` (ADR-009, Option B).
 
-`uid()` replaces `auth.uid()` throughout — the `SECURITY DEFINER` helpers execute as `rt_rls_owner`, which cannot be granted `USAGE` on the `auth` schema by `postgres`. See `04` §12.2 and `A4` ADR-009.
+`uid()` replaces `auth.uid()` throughout, removing a cross-schema dependency `postgres` cannot grant. Membership policies are **own-row-only**, which is what removes the recursion — and therefore the need for a privileged role. Co-member visibility returns with team invites in V2. See `04` §12.2–12.3 and `A4` ADR-009.
 
 ---
 
@@ -179,7 +179,7 @@ Issues found during the Phase 0 specification review, with resolution and owning
 | # | Problem | Resolution | Owner |
 |---|---|---|---|
 | B1 | `projects` in the generic RLS loop but has no `project_id` | Bespoke policy keyed on `id` | `04` §12.6 |
-| B2 | `auth_project_ids()` ↔ `projects` policy recursion | `BYPASSRLS`-owned `rt_auth` helpers | `04` §12.2–12.3, `ADR-009` |
+| B2 | `auth_project_ids()` ↔ `projects` policy recursion | Own-row-only membership policies + inline `projects` read; no privileged role | `04` §12.2–12.3, `ADR-009` |
 | B3 | Partitioned tables with PKs excluding the partition key | Composite PKs; soft references documented | `04` §7, `ADR-010` |
 | B4 | Membership tables had no RLS — full escalation path | Bespoke policies, owner-only writes, last-owner trigger | `04` §12.4–12.5, `ADR-009` |
 | B5 | Nullable `project_id` made org audit events invisible to all | Dual-branch policy + scope check constraint | `04` §12.7 |
