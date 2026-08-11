@@ -119,7 +119,9 @@ By scope: 3 organization-scoped, 22 project-scoped, 1 dual-scope (`audit_log`).
 
 **Partitions are separate relations and inherit nothing.** Each carries its own forced RLS and its own copy of the parent's policies, applied by `rt_admin.secure_partition()` at creation. The 26 count is *logical tables*; the true count of RLS-protected relations is 26 + one per live partition, and grows monthly. See `04` §12.10 (B13).
 
-Authorization helpers live in schema `rt_auth`, owned by `rt_rls_owner` (`NOLOGIN`, `BYPASSRLS`): `org_ids()`, `project_ids()`, `can_write_project(uuid)`, `is_project_admin(uuid)`, `is_org_owner(uuid)`.
+Authorization helpers live in schema `rt_auth`, owned by `rt_rls_owner` (`NOLOGIN`, `BYPASSRLS`): `uid()`, `org_ids()`, `project_ids()`, `can_write_project(uuid)`, `is_project_admin(uuid)`, `is_org_owner(uuid)`.
+
+`uid()` replaces `auth.uid()` throughout — the `SECURITY DEFINER` helpers execute as `rt_rls_owner`, which cannot be granted `USAGE` on the `auth` schema by `postgres`. See `04` §12.2 and `A4` ADR-009.
 
 ---
 
