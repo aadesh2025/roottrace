@@ -898,72 +898,78 @@ Every helper and every policy below uses this one definition.
 > Each of these three was found by a migration failing loudly on the first `supabase db reset`, which is the intended behaviour and the reason the assertions run at all. None of them was visible from the specification.
 
 ```sql
--- Organizations the caller belongs to.
+-- Organizations the caller belongs to. Reads only the caller's own rows.
 create or replace function rt_auth.org_ids() returns setof uuid
-language sql stable security definer
+language sql stable
 set search_path = pg_catalog, public          -- pinned: defeats search_path injection
 as $$
   select om.organization_id
     from public.organization_members om
-   where om.user_id = auth.uid()
+   where om.user_id = rt_auth.uid()
 $$;
 
--- Projects the caller can see: direct membership, or membership of the owning org.
+-- Projects the caller can see: direct membership, or membership of the owning
+-- org. The read of `projects` is itself filtered by projects' own policy, which
+-- reads only membership rows — one hop, no cycle.
 create or replace function rt_auth.project_ids() returns setof uuid
-language sql stable security definer
+language sql stable
 set search_path = pg_catalog, public
 as $$
   select pm.project_id
     from public.project_members pm
-   where pm.user_id = auth.uid()
+   where pm.user_id = rt_auth.uid()
   union
   select p.id
     from public.projects p
    where p.deleted_at is null
      and p.organization_id in (select om.organization_id
                                  from public.organization_members om
-                                where om.user_id = auth.uid())
+                                where om.user_id = rt_auth.uid())
 $$;
 
 -- Write authority on a project: project owner/maintainer, or org owner/maintainer.
 create or replace function rt_auth.can_write_project(pid uuid) returns boolean
-language sql stable security definer
+language sql stable
 set search_path = pg_catalog, public
 as $$
   select exists (select 1 from public.project_members pm
-                  where pm.project_id = pid and pm.user_id = auth.uid()
+                  where pm.project_id = pid and pm.user_id = rt_auth.uid()
                     and pm.role in ('owner','maintainer'))
       or exists (select 1 from public.projects p
                    join public.organization_members om
                      on om.organization_id = p.organization_id
-                  where p.id = pid and om.user_id = auth.uid()
+                  where p.id = pid and om.user_id = rt_auth.uid()
                     and om.role in ('owner','maintainer'))
 $$;
 
--- Administrative authority: may alter MEMBERSHIP. Strictly narrower than write.
+-- Administrative authority: may alter MEMBERSHIP. Strictly narrower than write,
+-- and that gap is what makes "maintainer promotes self to owner" an absent
+-- capability rather than a policy nuance (B4).
 create or replace function rt_auth.is_project_admin(pid uuid) returns boolean
-language sql stable security definer
+language sql stable
 set search_path = pg_catalog, public
 as $$
   select exists (select 1 from public.project_members pm
-                  where pm.project_id = pid and pm.user_id = auth.uid()
+                  where pm.project_id = pid and pm.user_id = rt_auth.uid()
                     and pm.role = 'owner')
       or exists (select 1 from public.projects p
                    join public.organization_members om
                      on om.organization_id = p.organization_id
-                  where p.id = pid and om.user_id = auth.uid()
+                  where p.id = pid and om.user_id = rt_auth.uid()
                     and om.role = 'owner')
 $$;
 
 create or replace function rt_auth.is_org_owner(oid uuid) returns boolean
-language sql stable security definer
+language sql stable
 set search_path = pg_catalog, public
 as $$
   select exists (select 1 from public.organization_members om
-                  where om.organization_id = oid and om.user_id = auth.uid()
+                  where om.organization_id = oid and om.user_id = rt_auth.uid()
                     and om.role = 'owner')
 $$;
 ```
+
+None of the six is `SECURITY DEFINER`. Each runs with exactly the privilege the caller already holds — the property the previous design could not offer, per ADR-009 Option B.
 
 Every helper is then locked down:
 
@@ -974,7 +980,7 @@ grant  execute on all functions in schema rt_auth to authenticated;
 
 **Why this is not an escalation path.** Four properties, each independently checked by a test:
 
-1. **No helper accepts a user identifier.** Every one derives identity from `auth.uid()` internally. There is no way to ask "what can *someone else* see" — the API surface simply does not express it.
+1. **No helper accepts a user identifier.** Every one derives identity from `rt_auth.uid()` internally. There is no way to ask "what can *someone else* see" — the API surface simply does not express it.
 2. **`search_path` is pinned** on every function, so a caller cannot shadow `public.project_members` with a temp table and feed a helper attacker-controlled rows.
 3. **`EXECUTE` is revoked from `PUBLIC`** and granted only to `authenticated`. `anon` cannot call them at all.
 4. **None of them is `SECURITY DEFINER`.** No helper runs with authority the caller does not already hold, which is the strongest form of this constraint rather than an approximation of it. The only `SECURITY DEFINER` object left is the last-owner trigger (§12.5), which answers a cardinality question no single row can and returns a boolean, never rows.
@@ -1021,8 +1027,13 @@ create policy organizations_write on organizations for all
 alter table organization_members enable row level security;
 alter table organization_members force  row level security;
 
+-- OWN ROW ONLY. The co-member clause is deliberately absent: reading other
+-- members' rows from this table's own policy is what forced a BYPASSRLS role in
+-- the original design, and written inline it raises `infinite recursion
+-- detected in policy`. V1 has no way to add a second member (invites are V2),
+-- so one row IS the roster. See ADR-009.
 create policy org_members_read on organization_members for select
-  using (user_id = auth.uid() or organization_id in (select rt_auth.org_ids()));
+  using (user_id = rt_auth.uid());
 
 create policy org_members_insert on organization_members for insert
   with check (rt_auth.is_org_owner(organization_id));
@@ -1050,8 +1061,9 @@ create policy gh_installations_write on github_installations for all
 alter table project_members enable row level security;
 alter table project_members force  row level security;
 
+-- Own row only, for the same reason as organization_members above.
 create policy project_members_read on project_members for select
-  using (user_id = auth.uid() or project_id in (select rt_auth.project_ids()));
+  using (user_id = rt_auth.uid());
 
 create policy project_members_insert on project_members for insert
   with check (rt_auth.is_project_admin(project_id));
@@ -1110,12 +1122,28 @@ create trigger project_members_keep_owner before delete or update on project_mem
 alter table projects enable row level security;
 alter table projects force  row level security;
 
+-- INLINE — never project_ids(). That helper reads projects, so a policy
+-- calling it re-enters itself: stack depth limit exceeded.
 create policy projects_read on projects for select
-  using (id in (select rt_auth.project_ids()));
+  using (
+       id in (select pm.project_id from project_members pm
+               where pm.user_id = rt_auth.uid())
+    or organization_id in (select om.organization_id from organization_members om
+                            where om.user_id = rt_auth.uid())
+  );
 
-create policy projects_write on projects for all
+-- PER-COMMAND — never for all. A for all policy's USING is evaluated on
+-- SELECT too, which would make every read of projects call a function
+-- (can_write_project) that reads projects.
+create policy projects_insert on projects for insert
+  with check (rt_auth.can_write_project(id));
+
+create policy projects_update on projects for update
   using      (rt_auth.can_write_project(id))
   with check (rt_auth.can_write_project(id));
+
+create policy projects_delete on projects for delete
+  using (rt_auth.can_write_project(id));
 ```
 
 ### 12.7 `audit_log` — dual-scope (B5)
