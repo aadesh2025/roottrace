@@ -86,11 +86,13 @@ We need Postgres, vector search, authentication, row-level multi-tenancy, and bl
 
 ### Decision
 
-**Supabase** (Postgres 15 + pgvector + GoTrue + Storage + RLS).
+**Supabase** (Postgres 17 + pgvector + GoTrue + Storage + RLS).
 
 The determining factor is **RLS**. Database-enforced tenancy makes an entire class of catastrophic bug structurally impossible. Application-layer tenancy is one forgotten `WHERE project_id = ...` away from a cross-tenant leak, and that mistake is easy to make, easy to miss in review, and devastating when it reaches production.
 
 Auth, pgvector, and storage arriving in the same product removes three integrations we would otherwise build and operate.
+
+**Postgres major version: 17.** Recorded explicitly so the next reader knows it was chosen rather than inherited from a CLI default. Supabase provisions new hosted projects on 17, and the self-hosted default image moved 15 → 17 on 2026-06-17. Pinning local development to 15 would not avoid divergence, it would *create* it — and in the worse direction, because local older than hosted means version differences surface in production rather than on a developer's machine. Three supporting reasons: PG15's extension support was slated to end around May 2026 and is already past, so 15 begins on a deprecation path; every extension we need (`pgcrypto`, `vector`, `pg_trgm`, `btree_gin`) is present on 17, none of them in the set 17 drops (`timescaledb`, `plv8`, `plls`, `plcoffee`, `pgjwt`); and the partition-pruning and vacuum improvements in 16/17 land directly on `raw_events` and `error_occurrences`, the two partitioned tables that carry the highest row volume in the system. Set in `infra/supabase/config.toml`.
 
 ### Consequences
 

@@ -65,7 +65,7 @@ Finish a ticket's acceptance criteria before starting the next. If you think a s
 | Layer | Choice |
 |---|---|
 | Backend | Python 3.12 · FastAPI · ARQ workers · `uv` |
-| Data | Supabase — Postgres 15 · pgvector · GoTrue · RLS · Storage |
+| Data | Supabase — Postgres 17 · pgvector · GoTrue · RLS · Storage |
 | Queue | Redis (queue, pub/sub, rate limits, idempotency) |
 | Frontend | Next.js 14 App Router · TypeScript · Tailwind · shadcn/ui · Monaco · Recharts · `pnpm` |
 | Sandbox | Hardened Docker (+gVisor in prod) |

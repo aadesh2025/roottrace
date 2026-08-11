@@ -36,8 +36,9 @@ that passes locally passes CI by construction. Target list is canonical in
 `docs/appendix/A3-CONFIGURATION.md` §5.2.
 
 **Prerequisites:** `uv` · Node 20+ with `corepack enable pnpm` · GNU Make ·
-`gitleaks` (the pre-commit secret scan fails loudly without it) · Docker for
-sandbox work from Phase 10.
+`gitleaks` (the pre-commit secret scan fails loudly without it) · **Docker from
+T1.2** — the Supabase CLI runs the whole local stack in containers, so
+`supabase start` and `supabase db reset` both need the daemon.
 
 **On Windows, run `make` from Git Bash, not PowerShell** — it needs `sh.exe` on
 PATH, and from Git Bash recipes behave exactly as they do in CI.
@@ -81,7 +82,7 @@ error in ──► fingerprint ──► triage ──► understand ──► r
 | Layer | Choice |
 |---|---|
 | Backend | Python 3.12 · FastAPI · ARQ workers |
-| Data & auth | Supabase — Postgres 15 · pgvector · GoTrue · RLS · Storage |
+| Data & auth | Supabase — Postgres 17 · pgvector · GoTrue · RLS · Storage |
 | Queue | Redis |
 | Frontend | Next.js 14 App Router · TypeScript · Tailwind · shadcn/ui · Monaco · Recharts |
 | Sandbox | Hardened Docker + gVisor — no network, no credentials, read-only rootfs |

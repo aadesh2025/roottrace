@@ -115,7 +115,7 @@ These were resolved before writing and are treated as fixed across the entire do
 |---|---|---|
 | Validation gate for V1 | **In-app sandbox compiler**; repo CI added in V2 as a second gate | `07`, `A4-ADR-001` |
 | Backend language | **Python 3.12 + FastAPI**; workers via ARQ + Redis | `02`, `A4-ADR-002` |
-| Database + Auth | **Supabase** (Postgres 15 + pgvector + GoTrue Auth + RLS + Storage) | `04`, `A4-ADR-003` |
+| Database + Auth | **Supabase** (Postgres 17 + pgvector + GoTrue Auth + RLS + Storage) | `04`, `A4-ADR-003` |
 | Repo access | **GitHub App**, selective file fetch via Contents/Git Data API — never a clone | `08`, `A4-ADR-004` |
 | Frontend | **Next.js 14 App Router**, TypeScript, Tailwind, shadcn/ui, Monaco, Recharts | `09`, `A4-ADR-005` |
 | Theme | **Light only.** White surfaces, blue accent. No dark mode in V1, no orange/green in the brand palette | `10`, `A4-ADR-006` |

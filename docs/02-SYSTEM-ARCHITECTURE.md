@@ -203,7 +203,7 @@ Key property: **it has no way to reach anything.** No network namespace with rou
 
 **Accepted trade-off:** the frontend is TypeScript, so we run two languages. Mitigated by generating both TS and Python types from shared JSON Schemas in `packages/shared-types`.
 
-### 5.2 Database: Supabase (Postgres 15 + pgvector)
+### 5.2 Database: Supabase (Postgres 17 + pgvector)
 
 | Criterion | Supabase | Self-hosted PG | PG + Pinecone |
 |---|---|---|---|
