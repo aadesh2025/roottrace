@@ -236,6 +236,16 @@ The line total is **~1,780, not the ~2,400 estimated**. Reported rather than pad
 
 **Accept:** Every payload validates against the ingest schema. Every ground truth references real symbols at real line numbers in the synthetic repo.
 
+**Done.** 25 payloads and 25 `.case.json` ground-truth files, verified by `tests/integration/test_fixture_corpus.py` (324 checks) and wired into `make fixtures-verify`, which runs in CI. Line ranges are resolved from the **AST** of the code they name, so a ground truth cannot drift from the repository without a failing test — drift here does not fail loudly, it quietly changes what the harness measures.
+
+Three decisions worth recording:
+
+- **The payloads are generated from real tracebacks, not written.** `fixtures/corpus/generate.py` runs each trigger and walks the captured `__traceback__`. `A1` §9's rule against hand-written traces is enforced by construction rather than by discipline, and regeneration is deterministic so a fixture refactor produces a diff rather than a silent invalidation. Harness frames are filtered exactly as an SDK filters its own — they would otherwise leak the local checkout path into a committed fixture.
+- **8 of the 25 cases are behavioural** — they return the wrong answer without raising — but an error observatory only ingests errors, and `14` §6.2 requires an `api_event` for every case. Each now runs through to the exception it actually causes in production: the oversell surfaces when the *next* customer checks out, the dropped rows surface when the batched writer indexes an empty chunk, the under-quote surfaces at reconciliation. The surfacing call sites are real features added append-only, so the pinned line numbers in `18` §7 could not move.
+- **`fingerprint` is `null` on all 25, deliberately.** S2's algorithm does not exist until T2.3, and a hand-written fingerprint would be a number the implementation is later forced to reproduce by coincidence — if it did not, the "ground truth" would be the thing that was wrong. T2.3 fills them in from the real algorithm; a test asserts they are absent until then and must be inverted when it does.
+
+`resource-01` carries one modelling decision, stated in the case file: a genuine `MemoryError` cannot be produced deterministically or safely, so the payload carries the failure the tenant's tracker really receives — the gateway size cap tripping *after* the peak. The defect being measured is the unbounded accumulation, which the trigger demonstrates directly by showing peak memory scale with the input.
+
 ### T3.3 GitHub fixture client
 
 The full `GitHubClient` interface, backed by the local fixture tree. Reads return fixture content; writes record `pull_request_records` with `is_simulated=true`. Same code path as `live`; only the transport differs.

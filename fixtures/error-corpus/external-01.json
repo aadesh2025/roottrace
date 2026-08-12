@@ -1,0 +1,102 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_external_01",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "UpstreamTimeout",
+        "message": "inventory did not respond within 2.0s",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/usr/src/app/services/inventory.py\", line 74, in reserve_for_cart\n    reservations.append(self.client.reserve(item.sku, item.quantity))\n  File \"/usr/src/app/clients/inventory_client.py\", line 53, in reserve\n    raise UpstreamTimeout(\"inventory\", self._timeout) from exc\nclients.errors.UpstreamTimeout: inventory did not respond within 2.0s\n",
+        "stack_frames": [
+          {
+            "file": "/usr/src/app/clients/inventory_client.py",
+            "line": 53,
+            "function": "reserve",
+            "in_app": true,
+            "context_line": "            raise UpstreamTimeout(\"inventory\", self._timeout) from exc",
+            "pre_context": [
+              "            raise UpstreamUnavailable(\"inventory\") from exc",
+              "        except httpx.TimeoutException as exc:"
+            ],
+            "post_context": [
+              "",
+              "    def ping(self) -> bool:"
+            ],
+            "vars": {
+              "sku": "'sku-1'",
+              "quantity": "2"
+            }
+          },
+          {
+            "file": "/usr/src/app/services/inventory.py",
+            "line": 74,
+            "function": "reserve_for_cart",
+            "in_app": true,
+            "context_line": "            reservations.append(self.client.reserve(item.sku, item.quantity))",
+            "pre_context": [
+              "        reservations: list[str] = []",
+              "        for item in cart.items:"
+            ],
+            "post_context": [
+              "        return reservations",
+              ""
+            ],
+            "vars": {
+              "cart": "<Cart id=c_8821 region='eu-west'>",
+              "reservations": "[]",
+              "item": "CartItem(sku='sku-1', quantity=2, unit_price=Decimal('19.99'))"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "/api/v2/checkout",
+        "route_pattern": "/api/v2/checkout",
+        "status_code": 500,
+        "duration_ms": 30412,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:13:52.070Z",
+          "category": "db",
+          "message": "SELECT * FROM carts WHERE id=? (11ms)",
+          "level": "info"
+        },
+        {
+          "ts": "2026-08-04T09:13:52.140Z",
+          "category": "http",
+          "message": "POST inventory/reserve sku=sku-1 \u2026 (30,006ms, no response)",
+          "level": "warning"
+        }
+      ],
+      "tags": {
+        "region": "eu-west-1",
+        "tenant_tier": "enterprise"
+      },
+      "extra": {
+        "cart_item_count": 2
+      }
+    }
+  ]
+}

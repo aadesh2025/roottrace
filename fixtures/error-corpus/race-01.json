@@ -1,0 +1,83 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_race_01",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "ValueError",
+        "message": "insufficient stock for sku-1",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/services/inventory.py\", line 49, in decrement\n    raise ValueError(f\"insufficient stock for {sku}\")\nValueError: insufficient stock for sku-1\n",
+        "stack_frames": [
+          {
+            "file": "/app/services/inventory.py",
+            "line": 49,
+            "function": "decrement",
+            "in_app": true,
+            "context_line": "            raise ValueError(f\"insufficient stock for {sku}\")",
+            "pre_context": [
+              "        current = self._stock.get(sku, 0)",
+              "        if current < quantity:"
+            ],
+            "post_context": [
+              "        remaining = current - quantity",
+              "        self._stock[sku] = remaining"
+            ],
+            "vars": {
+              "sku": "'sku-1'",
+              "quantity": "1",
+              "current": "0"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "/api/v2/checkout",
+        "route_pattern": "/api/v2/checkout",
+        "status_code": 500,
+        "duration_ms": 96,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:22.020Z",
+          "category": "job",
+          "message": "flash sale opened, 4 concurrent checkouts for sku-1",
+          "level": "info"
+        },
+        {
+          "ts": "2026-08-04T09:14:22.410Z",
+          "category": "db",
+          "message": "stock ledger read: sku-1 = 0",
+          "level": "warning"
+        }
+      ],
+      "tags": {
+        "region": "us-east-1",
+        "tenant_tier": "pro"
+      },
+      "extra": {
+        "oversold_by": 3
+      }
+    }
+  ]
+}

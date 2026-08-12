@@ -1,0 +1,70 @@
+{
+  "case_id": "boundary-01",
+  "schema_version": 1,
+  "difficulty": "easy",
+  "category": "off_by_one",
+  "repository": {
+    "fixture_path": "fixtures/synthetic-repo",
+    "ref": "v2.14.3",
+    "commit_sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b"
+  },
+  "bug_description": "Pagination is 1-based but page() slices as though it were 0-based, so the first line item is unreachable and the last page comes back empty.",
+  "api_event": "fixtures/error-corpus/boundary-01.json",
+  "expected": {
+    "fingerprint": null,
+    "issue_error_type": "IndexError",
+    "relevant_files": [
+      "services/cart.py",
+      "api/routes/cart.py"
+    ],
+    "retrieval_quality_min": 0.7,
+    "requires_breadcrumb_signal": false,
+    "root_cause_file": "services/cart.py",
+    "root_cause_function": "page",
+    "root_cause_line_range": [
+      84,
+      92
+    ],
+    "root_cause_category": "off_by_one",
+    "introduced_by_commit": "6d4b8e1f",
+    "evidence_must_cite": [
+      {
+        "kind": "file",
+        "repo_path": "services/cart.py",
+        "line_range": [
+          84,
+          92
+        ]
+      }
+    ],
+    "must_modify_files": [
+      "services/cart.py"
+    ],
+    "may_modify_files": [
+      "api/routes/cart.py",
+      "tests/test_cart.py"
+    ],
+    "must_not_modify_files": [
+      "models/cart.py",
+      ".github/workflows/ci.yml",
+      "requirements.txt"
+    ],
+    "acceptable_fix_strategies": [
+      "correct_index_arithmetic"
+    ],
+    "unacceptable_fix_strategies": [
+      "broad_try_except",
+      "suppress_at_call_site"
+    ],
+    "requires_regression_test": true,
+    "expected_blast_radius_mentions": [],
+    "validation": {
+      "should_pass": true,
+      "max_attempts": 1,
+      "mode": "full"
+    },
+    "confidence_band": "high",
+    "final_status": "awaiting_decision",
+    "should_open_pr": true
+  }
+}

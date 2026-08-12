@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 
 CSV_HEADER = "order_id,email,total,currency,status"
 
+# Mirrors the API gateway's response body cap.
+MAX_EXPORT_BYTES = 1024 * 1024
+
 
 class ExportService:
     def __init__(self, settings: Settings):
@@ -73,3 +76,33 @@ class ExportService:
         for line in rendered:
             buffer.write(line + "\n")
         return buffer.getvalue()
+
+    def export_batched(self, orders: list[Any], size: int) -> list[str]:
+        """Export in batches, returning one CSV document per batch.
+
+        `boundary-02` surfaces here. `chunk` produces `rows[start:start+size-1]`,
+        so a batch size of 1 yields empty lists and this indexes one. Batch
+        size 1 is what the throttled overnight export uses.
+        """
+        documents: list[str] = []
+        for batch in self.chunk(orders, size):
+            documents.append(self.export_all(batch) + f"# first={batch[0]['id']}\n")
+        return documents
+
+    def export_bounded(self, orders: list[Any]) -> str:
+        """Export, refusing to return a document larger than the gateway
+        accepts.
+
+        `resource-01` surfaces here. The limit mirrors the API gateway's body
+        cap, and it is checked *after* every row has been rendered and held in
+        memory — so the guard bounds the response and not the allocation. A
+        large tenant's export therefore fails at the end of a long, expensive
+        request that has already peaked.
+        """
+        document = self.export_all(orders)
+        if len(document.encode()) > MAX_EXPORT_BYTES:
+            raise ValueError(
+                f"export of {len(orders)} orders is {len(document.encode())} bytes, "
+                f"over the {MAX_EXPORT_BYTES} byte limit"
+            )
+        return document

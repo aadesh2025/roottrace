@@ -66,6 +66,21 @@ class CartService:
         """
         return cart.subtotal()
 
+    def assert_display_matches_charge(
+        self, cart: Cart, tax_rate: Decimal, charged: Decimal
+    ) -> None:
+        """The number on the cart page must equal the number charged.
+
+        `regression-03` surfaces here. `subtotal_with_tax` stopped applying the
+        rate in v2.14.2 without its name or signature changing, so the cart
+        page shows the untaxed figure while checkout charges the taxed one.
+        """
+        displayed = self.subtotal_with_tax(cart, tax_rate)
+        if displayed != charged:
+            raise ValueError(
+                f"cart {cart.id} displays {displayed} but checkout charges {charged}"
+            )
+
     def page(self, cart: Cart, offset: int, limit: int) -> list[CartItem]:
         """One page of line items.
 

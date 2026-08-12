@@ -1,0 +1,82 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_resource_01",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "ValueError",
+        "message": "export of 40000 orders is 1857817 bytes, over the 1048576 byte limit",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/services/export.py\", line 104, in export_bounded\n    raise ValueError(\nValueError: export of 40000 orders is 1857817 bytes, over the 1048576 byte limit\n",
+        "stack_frames": [
+          {
+            "file": "/app/services/export.py",
+            "line": 104,
+            "function": "export_bounded",
+            "in_app": true,
+            "context_line": "            raise ValueError(",
+            "pre_context": [
+              "        document = self.export_all(orders)",
+              "        if len(document.encode()) > MAX_EXPORT_BYTES:"
+            ],
+            "post_context": [
+              "                f\"export of {len(orders)} orders is {len(document.encode())} bytes, \"",
+              "                f\"over the {MAX_EXPORT_BYTES} byte limit\""
+            ],
+            "vars": {
+              "orders": "[{'id': 'ord_0', 'user': {'email': 'user0@example.com'}, 'total': '10.00', 'currency': 'USD', 'status': 'paid'}, {'id': 'ord_1', 'user': {'email': 'user1@example.com'}, 'total': '10.00', 'currency'...",
+              "document": "'order_id,email,total,currency,status\\nord_0,user0@example.com,10.00,USD,paid\\nord_1,user1@example.com,10.00,USD,paid\\nord_2,user2@example.com,10.00,USD,paid\\nord_3,user3@example.com,10.00,USD,paid..."
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "/api/v2/export/orders",
+        "route_pattern": "/api/v2/export/orders",
+        "status_code": 500,
+        "duration_ms": 48200,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:13:34.100Z",
+          "category": "job",
+          "message": "export started, 40,000 orders",
+          "level": "info"
+        },
+        {
+          "ts": "2026-08-04T09:14:18.900Z",
+          "category": "runtime",
+          "message": "rss 1.9 GB, container limit 2 GB",
+          "level": "warning"
+        }
+      ],
+      "tags": {
+        "region": "us-east-1",
+        "tenant_tier": "enterprise"
+      },
+      "extra": {
+        "order_count": 40000
+      }
+    }
+  ]
+}

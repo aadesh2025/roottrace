@@ -1,0 +1,72 @@
+{
+  "case_id": "null-prop-02",
+  "schema_version": 1,
+  "difficulty": "easy",
+  "category": "null_propagation",
+  "repository": {
+    "fixture_path": "fixtures/synthetic-repo",
+    "ref": "v2.14.3",
+    "commit_sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b"
+  },
+  "bug_description": "CartService.get_item returns None for a SKU that is not in the cart, and increase_quantity dereferences it.",
+  "api_event": "fixtures/error-corpus/null-prop-02.json",
+  "expected": {
+    "fingerprint": null,
+    "issue_error_type": "AttributeError",
+    "relevant_files": [
+      "services/cart.py",
+      "models/cart.py"
+    ],
+    "retrieval_quality_min": 0.7,
+    "requires_breadcrumb_signal": false,
+    "root_cause_file": "services/cart.py",
+    "root_cause_function": "get_item",
+    "root_cause_line_range": [
+      31,
+      37
+    ],
+    "root_cause_category": "missing_null_guard",
+    "introduced_by_commit": "6d4b8e1f",
+    "evidence_must_cite": [
+      {
+        "kind": "file",
+        "repo_path": "services/cart.py",
+        "line_range": [
+          31,
+          37
+        ]
+      }
+    ],
+    "must_modify_files": [
+      "services/cart.py"
+    ],
+    "may_modify_files": [
+      "tests/test_cart.py"
+    ],
+    "must_not_modify_files": [
+      "models/cart.py",
+      "api/routes/cart.py",
+      ".github/workflows/ci.yml",
+      "requirements.txt"
+    ],
+    "acceptable_fix_strategies": [
+      "raise_typed_exception",
+      "explicit_fallback_policy"
+    ],
+    "unacceptable_fix_strategies": [
+      "silent_default_zero",
+      "broad_try_except",
+      "suppress_at_call_site"
+    ],
+    "requires_regression_test": true,
+    "expected_blast_radius_mentions": [],
+    "validation": {
+      "should_pass": true,
+      "max_attempts": 1,
+      "mode": "full"
+    },
+    "confidence_band": "high",
+    "final_status": "awaiting_decision",
+    "should_open_pr": true
+  }
+}

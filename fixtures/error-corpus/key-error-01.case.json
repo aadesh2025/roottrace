@@ -1,0 +1,74 @@
+{
+  "case_id": "key-error-01",
+  "schema_version": 1,
+  "difficulty": "easy",
+  "category": "missing_key",
+  "repository": {
+    "fixture_path": "fixtures/synthetic-repo",
+    "ref": "v2.14.3",
+    "commit_sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b"
+  },
+  "bug_description": "verify_signature indexes headers['signature'] directly; the provider's retry probe sends no signature header.",
+  "api_event": "fixtures/error-corpus/key-error-01.json",
+  "expected": {
+    "fingerprint": null,
+    "issue_error_type": "KeyError",
+    "relevant_files": [
+      "api/routes/webhooks.py"
+    ],
+    "retrieval_quality_min": 0.75,
+    "requires_breadcrumb_signal": true,
+    "root_cause_file": "api/routes/webhooks.py",
+    "root_cause_function": "verify_signature",
+    "root_cause_line_range": [
+      26,
+      34
+    ],
+    "root_cause_category": "shape_assumption",
+    "introduced_by_commit": "3c1a9d2f",
+    "evidence_must_cite": [
+      {
+        "kind": "file",
+        "repo_path": "api/routes/webhooks.py",
+        "line_range": [
+          26,
+          34
+        ]
+      },
+      {
+        "kind": "breadcrumb",
+        "index": 0
+      }
+    ],
+    "must_modify_files": [
+      "api/routes/webhooks.py"
+    ],
+    "may_modify_files": [
+      "tests/test_webhooks.py"
+    ],
+    "must_not_modify_files": [
+      "clients/errors.py",
+      "services/checkout.py",
+      ".github/workflows/ci.yml",
+      "requirements.txt"
+    ],
+    "acceptable_fix_strategies": [
+      "explicit_fallback_policy",
+      "raise_typed_exception"
+    ],
+    "unacceptable_fix_strategies": [
+      "broad_try_except",
+      "suppress_at_call_site"
+    ],
+    "requires_regression_test": true,
+    "expected_blast_radius_mentions": [],
+    "validation": {
+      "should_pass": true,
+      "max_attempts": 1,
+      "mode": "full"
+    },
+    "confidence_band": "high",
+    "final_status": "awaiting_decision",
+    "should_open_pr": true
+  }
+}

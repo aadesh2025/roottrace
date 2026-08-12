@@ -1,0 +1,76 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_null_prop_03",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "TypeError",
+        "message": "unsupported operand type(s) for +: 'NoneType' and 'str'",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/services/pricing.py\", line 70, in tax_service_rate\n    return settings.tax_service_url + \"/rate?region=\" + region\nTypeError: unsupported operand type(s) for +: 'NoneType' and 'str'\n",
+        "stack_frames": [
+          {
+            "file": "/app/services/pricing.py",
+            "line": 70,
+            "function": "tax_service_rate",
+            "in_app": true,
+            "context_line": "    return settings.tax_service_url + \"/rate?region=\" + region",
+            "pre_context": [
+              "    without a tax service \u2014 and this concatenates it without checking.",
+              "    \"\"\""
+            ],
+            "post_context": [
+              "",
+              ""
+            ],
+            "vars": {
+              "settings": "Settings(environment='production', tax_service_url=None, inventory_service_url='http://inventory.internal', payment_service_url='http://payments.internal', export_batch_size=100, request_timeout_se...",
+              "region": "'eu-west'"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "/api/v2/checkout/{order_id}",
+        "route_pattern": "/api/v2/checkout/{order_id}",
+        "status_code": 500,
+        "duration_ms": 21,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:22.460Z",
+          "category": "config",
+          "message": "loaded settings for env=staging",
+          "level": "info"
+        }
+      ],
+      "tags": {
+        "region": "us-east-1",
+        "tenant_tier": "pro"
+      },
+      "extra": {
+        "tax_service_url": null
+      }
+    }
+  ]
+}

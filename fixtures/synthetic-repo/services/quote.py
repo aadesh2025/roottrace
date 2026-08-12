@@ -36,3 +36,21 @@ class QuoteService:
 
     def estimate_with_shipping(self, cart: Cart, shipping: Decimal) -> Decimal:
         return self.estimate_total(cart) + shipping
+
+    def reconcile(self, cart: Cart, charged_total: Decimal) -> None:
+        """Refuse to complete a checkout that does not match its quote.
+
+        Finance added this after the June incident: if the customer was shown
+        one number and charged another, the order is stopped rather than
+        settled.
+
+        `regression-02` surfaces here. During a tax-service outage the quote
+        silently falls back to the untaxed subtotal while checkout still adds
+        tax, so the two disagree by exactly the tax amount and every checkout
+        in the region fails.
+        """
+        quoted = self.estimate_total(cart)
+        if quoted != charged_total:
+            raise ValueError(
+                f"quote drift for cart {cart.id}: quoted {quoted}, charging {charged_total}"
+            )

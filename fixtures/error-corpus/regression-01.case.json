@@ -1,0 +1,74 @@
+{
+  "case_id": "regression-01",
+  "schema_version": 1,
+  "difficulty": "medium",
+  "category": "regression",
+  "repository": {
+    "fixture_path": "fixtures/synthetic-repo",
+    "ref": "v2.14.3",
+    "commit_sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b"
+  },
+  "bug_description": "apply_discount gained a required region parameter in v2.14.2; discounted_subtotal was the one caller not updated.",
+  "api_event": "fixtures/error-corpus/regression-01.json",
+  "expected": {
+    "fingerprint": null,
+    "issue_error_type": "TypeError",
+    "relevant_files": [
+      "services/pricing.py",
+      "services/checkout.py"
+    ],
+    "retrieval_quality_min": 0.65,
+    "requires_breadcrumb_signal": true,
+    "root_cause_file": "services/pricing.py",
+    "root_cause_function": "apply_discount",
+    "root_cause_line_range": [
+      38,
+      48
+    ],
+    "root_cause_category": "signature_change",
+    "introduced_by_commit": "6d4b8e1f",
+    "evidence_must_cite": [
+      {
+        "kind": "file",
+        "repo_path": "services/pricing.py",
+        "line_range": [
+          38,
+          48
+        ]
+      },
+      {
+        "kind": "breadcrumb",
+        "index": 1
+      }
+    ],
+    "must_modify_files": [
+      "services/checkout.py"
+    ],
+    "may_modify_files": [
+      "services/pricing.py",
+      "tests/test_checkout.py"
+    ],
+    "must_not_modify_files": [
+      "api/routes/checkout.py",
+      ".github/workflows/ci.yml",
+      "requirements.txt"
+    ],
+    "acceptable_fix_strategies": [
+      "update_caller_to_new_signature"
+    ],
+    "unacceptable_fix_strategies": [
+      "broad_try_except",
+      "suppress_at_call_site"
+    ],
+    "requires_regression_test": true,
+    "expected_blast_radius_mentions": [],
+    "validation": {
+      "should_pass": true,
+      "max_attempts": 1,
+      "mode": "full"
+    },
+    "confidence_band": "high",
+    "final_status": "awaiting_decision",
+    "should_open_pr": true
+  }
+}

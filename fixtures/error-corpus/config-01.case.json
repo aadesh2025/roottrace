@@ -1,0 +1,75 @@
+{
+  "case_id": "config-01",
+  "schema_version": 1,
+  "difficulty": "medium",
+  "category": "configuration",
+  "repository": {
+    "fixture_path": "fixtures/synthetic-repo",
+    "ref": "v2.14.3",
+    "commit_sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b"
+  },
+  "bug_description": "eu-north was added to the load balancer and the signup form but never to REGION_CONFIG, and region_config indexes it directly.",
+  "api_event": "fixtures/error-corpus/config-01.json",
+  "expected": {
+    "fingerprint": null,
+    "issue_error_type": "KeyError",
+    "relevant_files": [
+      "config/regions.py",
+      "services/checkout.py"
+    ],
+    "retrieval_quality_min": 0.65,
+    "requires_breadcrumb_signal": true,
+    "root_cause_file": "config/regions.py",
+    "root_cause_function": "region_config",
+    "root_cause_line_range": [
+      20,
+      21
+    ],
+    "root_cause_category": "missing_config_entry",
+    "introduced_by_commit": "3c1a9d2f",
+    "evidence_must_cite": [
+      {
+        "kind": "file",
+        "repo_path": "config/regions.py",
+        "line_range": [
+          20,
+          21
+        ]
+      },
+      {
+        "kind": "breadcrumb",
+        "index": 0
+      }
+    ],
+    "must_modify_files": [
+      "config/regions.py"
+    ],
+    "may_modify_files": [
+      "services/checkout.py",
+      "tests/test_checkout.py"
+    ],
+    "must_not_modify_files": [
+      "api/routes/checkout.py",
+      ".github/workflows/ci.yml",
+      "requirements.txt"
+    ],
+    "acceptable_fix_strategies": [
+      "explicit_fallback_policy",
+      "raise_typed_exception"
+    ],
+    "unacceptable_fix_strategies": [
+      "broad_try_except",
+      "suppress_at_call_site"
+    ],
+    "requires_regression_test": true,
+    "expected_blast_radius_mentions": [],
+    "validation": {
+      "should_pass": true,
+      "max_attempts": 1,
+      "mode": "full"
+    },
+    "confidence_band": "high",
+    "final_status": "awaiting_decision",
+    "should_open_pr": true
+  }
+}

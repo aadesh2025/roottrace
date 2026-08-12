@@ -1,0 +1,82 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_type_mismatch_03",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "TypeError",
+        "message": "can't multiply sequence by non-int of type 'decimal.Decimal'",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/services/pricing.py\", line 87, in total_with_rate\n    return (subtotal * (Decimal(\"1\") + rate)).quantize(\nTypeError: can't multiply sequence by non-int of type 'decimal.Decimal'\n",
+        "stack_frames": [
+          {
+            "file": "/app/services/pricing.py",
+            "line": 87,
+            "function": "total_with_rate",
+            "in_app": true,
+            "context_line": "    return (subtotal * (Decimal(\"1\") + rate)).quantize(",
+            "pre_context": [
+              "",
+              "def total_with_rate(subtotal: Decimal, rate: Decimal) -> Decimal:"
+            ],
+            "post_context": [
+              "        Decimal(\"0.01\"), rounding=ROUND_HALF_UP",
+              "    )"
+            ],
+            "vars": {
+              "subtotal": "'12.50'",
+              "rate": "Decimal('0.2')"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "/api/v2/pricing/import",
+        "route_pattern": "/api/v2/pricing/import",
+        "status_code": 500,
+        "duration_ms": 1502,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:21.900Z",
+          "category": "job",
+          "message": "supplier price book import started",
+          "level": "info"
+        },
+        {
+          "ts": "2026-08-04T09:14:22.310Z",
+          "category": "job",
+          "message": "merged 1,204 supplier prices",
+          "level": "info"
+        }
+      ],
+      "tags": {
+        "region": "eu-west-1",
+        "tenant_tier": "enterprise"
+      },
+      "extra": {
+        "supplier": "acme-wholesale"
+      }
+    }
+  ]
+}

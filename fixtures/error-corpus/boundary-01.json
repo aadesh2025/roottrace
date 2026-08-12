@@ -1,0 +1,79 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_boundary_01",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "IndexError",
+        "message": "list index out of range",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/api/routes/cart.py\", line 70, in first_item_on_page\n    return {\"sku\": items[0].sku, \"quantity\": items[0].quantity}\nIndexError: list index out of range\n",
+        "stack_frames": [
+          {
+            "file": "/app/api/routes/cart.py",
+            "line": 70,
+            "function": "first_item_on_page",
+            "in_app": true,
+            "context_line": "    return {\"sku\": items[0].sku, \"quantity\": items[0].quantity}",
+            "pre_context": [
+              "    cart = service.get(cart_id)",
+              "    items = service.page(cart, offset, 1)"
+            ],
+            "post_context": [
+              "",
+              ""
+            ],
+            "vars": {
+              "cart_id": "'c_page'",
+              "offset": "2",
+              "service": "<services.cart.CartService object>",
+              "cart": "<Cart id=c_page region='eu-west'>",
+              "items": "[]"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "/api/v2/cart/{cart_id}/items/first",
+        "route_pattern": "/api/v2/cart/{cart_id}/items/first",
+        "status_code": 500,
+        "duration_ms": 15,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:22.450Z",
+          "category": "ui",
+          "message": "jump-to-item, page 2 of 2",
+          "level": "info"
+        }
+      ],
+      "tags": {
+        "region": "us-east-1",
+        "tenant_tier": "free"
+      },
+      "extra": {
+        "offset": 2
+      }
+    }
+  ]
+}

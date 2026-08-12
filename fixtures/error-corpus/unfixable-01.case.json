@@ -1,0 +1,26 @@
+{
+  "case_id": "unfixable-01",
+  "schema_version": 1,
+  "difficulty": "control",
+  "category": "unfixable_external",
+  "repository": {
+    "fixture_path": "fixtures/synthetic-repo",
+    "ref": "v2.14.3",
+    "commit_sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b"
+  },
+  "bug_description": "The external inventory service returned 503 during a scheduled maintenance window. InventoryClient.reserve already raises a typed, named UpstreamUnavailable and the caller propagates it correctly; there is no defect in this repository to fix.",
+  "api_event": "fixtures/error-corpus/unfixable-01.json",
+  "expected": {
+    "fingerprint": null,
+    "relevant_files": [
+      "clients/inventory_client.py",
+      "services/inventory.py"
+    ],
+    "final_status": "insufficient_context",
+    "should_open_pr": false,
+    "must_produce_patch": false,
+    "must_not_fabricate_root_cause": true,
+    "explanation_must_state_external_cause": true,
+    "confidence_band": "insufficient"
+  }
+}

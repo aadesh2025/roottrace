@@ -56,6 +56,20 @@ def apply_coupon(cart_id: str, payload: dict) -> dict:
     return {"cart_id": cart.id, "coupon_code": cart.coupon_code}
 
 
+@router.get("/{cart_id}/items/first")
+def first_item_on_page(cart_id: str, offset: int = 1) -> dict:
+    """The first line item on a page — powers the "jump to item" control.
+
+    `boundary-01` surfaces here. Pagination is 1-based, `page` slices as
+    though it were 0-based, and the last page therefore comes back empty, so
+    this indexes an empty list.
+    """
+    service = get_cart_service()
+    cart = service.get(cart_id)
+    items = service.page(cart, offset, 1)
+    return {"sku": items[0].sku, "quantity": items[0].quantity}
+
+
 @router.get("/{cart_id}/items")
 def list_items(cart_id: str, offset: int = 1, limit: int = 20) -> dict:
     """Paginated line items. Pagination is 1-based in this API."""

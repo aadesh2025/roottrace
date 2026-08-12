@@ -1,0 +1,77 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_key_error_01",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "KeyError",
+        "message": "'signature'",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/api/routes/webhooks.py\", line 32, in verify_signature\n    provided = headers[\"signature\"]\nKeyError: 'signature'\n",
+        "stack_frames": [
+          {
+            "file": "/app/api/routes/webhooks.py",
+            "line": 32,
+            "function": "verify_signature",
+            "in_app": true,
+            "context_line": "    provided = headers[\"signature\"]",
+            "pre_context": [
+              "    which are entirely under the caller's control.",
+              "    \"\"\""
+            ],
+            "post_context": [
+              "    expected = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()",
+              "    return hmac.compare_digest(provided, expected)"
+            ],
+            "vars": {
+              "headers": "{'content-type': 'application/json'}",
+              "body": "b'{}'"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "/api/v2/webhooks/stripe",
+        "route_pattern": "/api/v2/webhooks/stripe",
+        "status_code": 500,
+        "duration_ms": 12,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:22.470Z",
+          "category": "http",
+          "message": "inbound webhook probe, headers=[content-type]",
+          "level": "info"
+        }
+      ],
+      "tags": {
+        "region": "us-east-1",
+        "tenant_tier": "pro"
+      },
+      "extra": {
+        "provider": "stripe",
+        "probe": true
+      }
+    }
+  ]
+}

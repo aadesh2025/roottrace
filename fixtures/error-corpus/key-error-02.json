@@ -1,0 +1,76 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_key_error_02",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "KeyError",
+        "message": "'coupon_code'",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/api/routes/cart.py\", line 55, in apply_coupon\n    cart.coupon_code = payload[\"coupon_code\"]\nKeyError: 'coupon_code'\n",
+        "stack_frames": [
+          {
+            "file": "/app/api/routes/cart.py",
+            "line": 55,
+            "function": "apply_coupon",
+            "in_app": true,
+            "context_line": "    cart.coupon_code = payload[\"coupon_code\"]",
+            "pre_context": [
+              "    service = get_cart_service()",
+              "    cart = service.get(cart_id)"
+            ],
+            "post_context": [
+              "    return {\"cart_id\": cart.id, \"coupon_code\": cart.coupon_code}",
+              ""
+            ],
+            "vars": {
+              "cart_id": "'c_coupon'",
+              "payload": "{'cart_id': 'c_coupon'}",
+              "service": "<services.cart.CartService object>",
+              "cart": "<Cart id=c_coupon region='us-east'>"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "/api/v2/cart/{cart_id}/coupon",
+        "route_pattern": "/api/v2/cart/{cart_id}/coupon",
+        "status_code": 500,
+        "duration_ms": 18,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:22.440Z",
+          "category": "ui",
+          "message": "coupon field submitted empty",
+          "level": "info"
+        }
+      ],
+      "tags": {
+        "region": "us-east-1",
+        "tenant_tier": "free"
+      },
+      "extra": {}
+    }
+  ]
+}

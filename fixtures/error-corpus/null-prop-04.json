@@ -1,0 +1,101 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_null_prop_04",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "AttributeError",
+        "message": "'NoneType' object has no attribute 'percent_off'",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/services/checkout.py\", line 96, in discounted_subtotal\n    percent = self._discount_percent(user)\n  File \"/app/services/checkout.py\", line 86, in _discount_percent\n    return profile.percent_off\nAttributeError: 'NoneType' object has no attribute 'percent_off'\n",
+        "stack_frames": [
+          {
+            "file": "/app/services/checkout.py",
+            "line": 86,
+            "function": "_discount_percent",
+            "in_app": true,
+            "context_line": "        return profile.percent_off",
+            "pre_context": [
+              "        \"\"\"",
+              "        profile = user.discount_profile"
+            ],
+            "post_context": [
+              "",
+              "    def discounted_subtotal(self, cart: Cart, user: User) -> Decimal:"
+            ],
+            "vars": {
+              "user": "User(id='u_9f2b1c', email='ada@example.com', plan='pro', is_authenticated=True, discount_profile=None)",
+              "profile": "None"
+            }
+          },
+          {
+            "file": "/app/services/checkout.py",
+            "line": 96,
+            "function": "discounted_subtotal",
+            "in_app": true,
+            "context_line": "        percent = self._discount_percent(user)",
+            "pre_context": [
+              "        one.",
+              "        \"\"\""
+            ],
+            "post_context": [
+              "        return pricing.apply_discount(cart.subtotal(), percent)",
+              ""
+            ],
+            "vars": {
+              "cart": "<Cart id=c_8821 region='eu-west'>",
+              "user": "User(id='u_9f2b1c', email='ada@example.com', plan='pro', is_authenticated=True, discount_profile=None)"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "/api/v2/checkout",
+        "route_pattern": "/api/v2/checkout",
+        "status_code": 500,
+        "duration_ms": 209,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:22.300Z",
+          "category": "db",
+          "message": "SELECT * FROM users WHERE id=? (7ms)",
+          "level": "info"
+        },
+        {
+          "ts": "2026-08-04T09:14:22.418Z",
+          "category": "http",
+          "message": "GET billing/profile?user=u_9f2b1c \u2192 200 (no discount_profile)",
+          "level": "info"
+        }
+      ],
+      "tags": {
+        "region": "us-west-1",
+        "tenant_tier": "free"
+      },
+      "extra": {
+        "plan": "free"
+      }
+    }
+  ]
+}

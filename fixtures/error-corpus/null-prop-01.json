@@ -1,0 +1,105 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_null_prop_01",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "TypeError",
+        "message": "unsupported operand type(s) for +: 'decimal.Decimal' and 'NoneType'",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/api/routes/checkout.py\", line 58, in _build_response\n    total = checkout_service.calculate_total(cart, user)\n  File \"/app/services/checkout.py\", line 142, in calculate_total\n    subtotal = base_price + tax_amount\nTypeError: unsupported operand type(s) for +: 'decimal.Decimal' and 'NoneType'\n",
+        "stack_frames": [
+          {
+            "file": "/app/services/checkout.py",
+            "line": 142,
+            "function": "calculate_total",
+            "in_app": true,
+            "context_line": "        subtotal = base_price + tax_amount",
+            "pre_context": [
+              "            logger.info(\"enterprise checkout for cart=%s\", cart.id)",
+              ""
+            ],
+            "post_context": [
+              "        return subtotal",
+              ""
+            ],
+            "vars": {
+              "cart": "<Cart id=c_8821 region='eu-west'>",
+              "user": "User(id='u_9f2b1c', email='ada@example.com', plan='pro', is_authenticated=True, discount_profile=DiscountProfile(tier='gold', percent_off=10))",
+              "base_price": "Decimal('49.99')",
+              "tax_amount": "None"
+            }
+          },
+          {
+            "file": "/app/api/routes/checkout.py",
+            "line": 58,
+            "function": "_build_response",
+            "in_app": true,
+            "context_line": "    total = checkout_service.calculate_total(cart, user)",
+            "pre_context": [
+              "    stay readable.",
+              "    \"\"\""
+            ],
+            "post_context": [
+              "    order = checkout_service.create_order(cart, user)",
+              "    return {"
+            ],
+            "vars": {
+              "cart": "<Cart id=c_8821 region='eu-west'>",
+              "user": "User(id='u_9f2b1c', email='ada@example.com', plan='pro', is_authenticated=True, discount_profile=DiscountProfile(tier='gold', percent_off=10))",
+              "checkout_service": "<services.checkout.CheckoutService object>"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "/api/v2/checkout",
+        "route_pattern": "/api/v2/checkout",
+        "status_code": 500,
+        "duration_ms": 412,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:22.101Z",
+          "category": "db",
+          "message": "SELECT * FROM carts WHERE id=? (12ms)",
+          "level": "info"
+        },
+        {
+          "ts": "2026-08-04T09:14:22.340Z",
+          "category": "http",
+          "message": "GET tax-service/rate?region=eu-west \u2192 503",
+          "level": "warning"
+        }
+      ],
+      "tags": {
+        "region": "eu-west-1",
+        "tenant_tier": "enterprise"
+      },
+      "extra": {
+        "cart_item_count": 3,
+        "cart_subtotal": "49.99"
+      }
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "case_id": "external-03",
+  "schema_version": 1,
+  "difficulty": "hard",
+  "category": "external_dependency",
+  "repository": {
+    "fixture_path": "fixtures/synthetic-repo",
+    "ref": "v2.14.3",
+    "commit_sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b"
+  },
+  "bug_description": "reserve has no circuit breaker, so every request pays the full failure cost for the whole outage instead of failing fast after the first.",
+  "api_event": "fixtures/error-corpus/external-03.json",
+  "expected": {
+    "fingerprint": null,
+    "issue_error_type": "UpstreamUnavailable",
+    "relevant_files": [
+      "clients/inventory_client.py",
+      "services/inventory.py"
+    ],
+    "retrieval_quality_min": 0.45,
+    "requires_breadcrumb_signal": true,
+    "root_cause_file": "clients/inventory_client.py",
+    "root_cause_function": "reserve",
+    "root_cause_line_range": [
+      40,
+      53
+    ],
+    "root_cause_category": "missing_circuit_breaker",
+    "introduced_by_commit": "3c1a9d2f",
+    "evidence_must_cite": [
+      {
+        "kind": "file",
+        "repo_path": "clients/inventory_client.py",
+        "line_range": [
+          40,
+          53
+        ]
+      },
+      {
+        "kind": "breadcrumb",
+        "index": 1
+      }
+    ],
+    "must_modify_files": [
+      "clients/inventory_client.py"
+    ],
+    "may_modify_files": [
+      "clients/errors.py",
+      "services/inventory.py"
+    ],
+    "must_not_modify_files": [
+      "api/routes/checkout.py",
+      ".github/workflows/ci.yml",
+      "requirements.txt"
+    ],
+    "acceptable_fix_strategies": [
+      "add_circuit_breaker",
+      "add_deadline_budget"
+    ],
+    "unacceptable_fix_strategies": [
+      "unbounded_retry",
+      "broad_try_except",
+      "suppress_at_call_site"
+    ],
+    "requires_regression_test": true,
+    "expected_blast_radius_mentions": [],
+    "validation": {
+      "should_pass": true,
+      "max_attempts": 1,
+      "mode": "full"
+    },
+    "confidence_band": "medium",
+    "final_status": "awaiting_decision",
+    "should_open_pr": true
+  }
+}

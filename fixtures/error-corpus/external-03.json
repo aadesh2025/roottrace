@@ -1,0 +1,82 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_external_03",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "UpstreamUnavailable",
+        "message": "inventory is unavailable",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/clients/inventory_client.py\", line 51, in reserve\n    raise UpstreamUnavailable(\"inventory\") from exc\nclients.errors.UpstreamUnavailable: inventory is unavailable\n",
+        "stack_frames": [
+          {
+            "file": "/app/clients/inventory_client.py",
+            "line": 51,
+            "function": "reserve",
+            "in_app": true,
+            "context_line": "            raise UpstreamUnavailable(\"inventory\") from exc",
+            "pre_context": [
+              "            return str(resp.json()[\"reservation_id\"])",
+              "        except httpx.ConnectError as exc:"
+            ],
+            "post_context": [
+              "        except httpx.TimeoutException as exc:",
+              "            raise UpstreamTimeout(\"inventory\", self._timeout) from exc"
+            ],
+            "vars": {
+              "sku": "'sku-1'",
+              "quantity": "1"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "/api/v2/checkout",
+        "route_pattern": "/api/v2/checkout",
+        "status_code": 500,
+        "duration_ms": 2044,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:20.400Z",
+          "category": "http",
+          "message": "POST inventory/reserve \u2192 DNS failure (attempt 1)",
+          "level": "error"
+        },
+        {
+          "ts": "2026-08-04T09:14:21.440Z",
+          "category": "http",
+          "message": "POST inventory/reserve \u2192 DNS failure (attempt 2)",
+          "level": "error"
+        }
+      ],
+      "tags": {
+        "region": "ap-south-1",
+        "tenant_tier": "pro"
+      },
+      "extra": {
+        "consecutive_failures": 5
+      }
+    }
+  ]
+}

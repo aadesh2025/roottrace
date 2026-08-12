@@ -1,0 +1,84 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_null_prop_02",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "AttributeError",
+        "message": "'NoneType' object has no attribute 'quantity'",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/services/cart.py\", line 47, in increase_quantity\n    item.quantity += by\nAttributeError: 'NoneType' object has no attribute 'quantity'\n",
+        "stack_frames": [
+          {
+            "file": "/app/services/cart.py",
+            "line": 47,
+            "function": "increase_quantity",
+            "in_app": true,
+            "context_line": "        item.quantity += by",
+            "pre_context": [
+              "        \"\"\"",
+              "        item = self.get_item(cart, sku)"
+            ],
+            "post_context": [
+              "        return item.quantity",
+              ""
+            ],
+            "vars": {
+              "cart": "<Cart id=c_8821 region='eu-west'>",
+              "sku": "'sku-not-in-cart'",
+              "by": "1",
+              "item": "None"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "/api/v2/cart/{cart_id}/items",
+        "route_pattern": "/api/v2/cart/{cart_id}/items",
+        "status_code": 500,
+        "duration_ms": 38,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:22.410Z",
+          "category": "db",
+          "message": "SELECT * FROM carts WHERE id=? (9ms)",
+          "level": "info"
+        },
+        {
+          "ts": "2026-08-04T09:14:22.455Z",
+          "category": "navigation",
+          "message": "stale tab replayed add-item",
+          "level": "info"
+        }
+      ],
+      "tags": {
+        "region": "us-east-1",
+        "tenant_tier": "free"
+      },
+      "extra": {
+        "sku": "sku-not-in-cart"
+      }
+    }
+  ]
+}

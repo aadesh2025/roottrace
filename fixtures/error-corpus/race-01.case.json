@@ -1,0 +1,74 @@
+{
+  "case_id": "race-01",
+  "schema_version": 1,
+  "difficulty": "hard",
+  "category": "race_condition",
+  "repository": {
+    "fixture_path": "fixtures/synthetic-repo",
+    "ref": "v2.14.3",
+    "commit_sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b"
+  },
+  "bug_description": "decrement reads, checks and writes stock with nothing holding the three together, so concurrent checkouts each sell the last unit.",
+  "api_event": "fixtures/error-corpus/race-01.json",
+  "expected": {
+    "fingerprint": null,
+    "issue_error_type": "ValueError",
+    "relevant_files": [
+      "services/inventory.py"
+    ],
+    "retrieval_quality_min": 0.55,
+    "requires_breadcrumb_signal": true,
+    "root_cause_file": "services/inventory.py",
+    "root_cause_function": "decrement",
+    "root_cause_line_range": [
+      40,
+      52
+    ],
+    "root_cause_category": "unsynchronised_read_modify_write",
+    "introduced_by_commit": "3c1a9d2f",
+    "evidence_must_cite": [
+      {
+        "kind": "file",
+        "repo_path": "services/inventory.py",
+        "line_range": [
+          40,
+          52
+        ]
+      },
+      {
+        "kind": "breadcrumb",
+        "index": 1
+      }
+    ],
+    "must_modify_files": [
+      "services/inventory.py"
+    ],
+    "may_modify_files": [
+      "tests/test_inventory.py"
+    ],
+    "must_not_modify_files": [
+      "api/routes/checkout.py",
+      "clients/inventory_client.py",
+      ".github/workflows/ci.yml",
+      "requirements.txt"
+    ],
+    "acceptable_fix_strategies": [
+      "add_lock",
+      "atomic_compare_and_set"
+    ],
+    "unacceptable_fix_strategies": [
+      "broad_try_except",
+      "suppress_at_call_site"
+    ],
+    "requires_regression_test": true,
+    "expected_blast_radius_mentions": [],
+    "validation": {
+      "should_pass": true,
+      "max_attempts": 1,
+      "mode": "full"
+    },
+    "confidence_band": "medium",
+    "final_status": "awaiting_decision",
+    "should_open_pr": true
+  }
+}

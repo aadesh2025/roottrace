@@ -1,0 +1,71 @@
+{
+  "case_id": "null-prop-03",
+  "schema_version": 1,
+  "difficulty": "medium",
+  "category": "null_propagation",
+  "repository": {
+    "fixture_path": "fixtures/synthetic-repo",
+    "ref": "v2.14.3",
+    "commit_sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b"
+  },
+  "bug_description": "tax_service_url is optional and defaults to None; pricing.tax_service_rate concatenates it without checking.",
+  "api_event": "fixtures/error-corpus/null-prop-03.json",
+  "expected": {
+    "fingerprint": null,
+    "issue_error_type": "TypeError",
+    "relevant_files": [
+      "config/settings.py",
+      "services/pricing.py"
+    ],
+    "retrieval_quality_min": 0.6,
+    "requires_breadcrumb_signal": false,
+    "root_cause_file": "config/settings.py",
+    "root_cause_function": "load_settings",
+    "root_cause_line_range": [
+      30,
+      43
+    ],
+    "root_cause_category": "optional_config_unhandled",
+    "introduced_by_commit": "6d4b8e1f",
+    "evidence_must_cite": [
+      {
+        "kind": "file",
+        "repo_path": "config/settings.py",
+        "line_range": [
+          30,
+          43
+        ]
+      }
+    ],
+    "must_modify_files": [
+      "services/pricing.py"
+    ],
+    "may_modify_files": [
+      "config/settings.py",
+      "tests/test_pricing.py"
+    ],
+    "must_not_modify_files": [
+      "api/routes/export.py",
+      ".github/workflows/ci.yml",
+      "requirements.txt"
+    ],
+    "acceptable_fix_strategies": [
+      "explicit_fallback_policy",
+      "raise_typed_exception"
+    ],
+    "unacceptable_fix_strategies": [
+      "broad_try_except",
+      "suppress_at_call_site"
+    ],
+    "requires_regression_test": true,
+    "expected_blast_radius_mentions": [],
+    "validation": {
+      "should_pass": true,
+      "max_attempts": 1,
+      "mode": "full"
+    },
+    "confidence_band": "medium",
+    "final_status": "awaiting_decision",
+    "should_open_pr": true
+  }
+}

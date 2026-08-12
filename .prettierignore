@@ -14,4 +14,10 @@ uv.lock
 .next/
 dist/
 fixtures/synthetic-repo/
+# The error corpus is emitted by fixtures/corpus/generate.py, which is its
+# formatter. Letting prettier reformat it too would mean the committed files no
+# longer match what regenerating produces, so every regeneration would show a
+# spurious diff and `make fixtures-verify` would be comparing against a file
+# nothing writes.
+fixtures/error-corpus/
 infra/supabase/.temp/

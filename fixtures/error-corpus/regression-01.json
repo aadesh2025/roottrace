@@ -1,0 +1,83 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_regression_01",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "TypeError",
+        "message": "apply_discount() missing 1 required positional argument: 'region'",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/services/checkout.py\", line 97, in discounted_subtotal\n    return pricing.apply_discount(cart.subtotal(), percent)\nTypeError: apply_discount() missing 1 required positional argument: 'region'\n",
+        "stack_frames": [
+          {
+            "file": "/app/services/checkout.py",
+            "line": 97,
+            "function": "discounted_subtotal",
+            "in_app": true,
+            "context_line": "        return pricing.apply_discount(cart.subtotal(), percent)",
+            "pre_context": [
+              "        \"\"\"",
+              "        percent = self._discount_percent(user)"
+            ],
+            "post_context": [
+              "",
+              "    # \u2500\u2500 Payment \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+            ],
+            "vars": {
+              "cart": "<Cart id=c_8821 region='eu-west'>",
+              "user": "User(id='u_9f2b1c', email='ada@example.com', plan='pro', is_authenticated=True, discount_profile=DiscountProfile(tier='gold', percent_off=10))",
+              "percent": "10"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "/api/v2/checkout",
+        "route_pattern": "/api/v2/checkout",
+        "status_code": 500,
+        "duration_ms": 44,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:22.300Z",
+          "category": "deploy",
+          "message": "v2.14.2 rolled out 6 days ago",
+          "level": "info"
+        },
+        {
+          "ts": "2026-08-04T09:14:22.460Z",
+          "category": "db",
+          "message": "SELECT discount_profile (5ms)",
+          "level": "info"
+        }
+      ],
+      "tags": {
+        "region": "us-east-1",
+        "tenant_tier": "pro"
+      },
+      "extra": {
+        "release": "v2.14.3"
+      }
+    }
+  ]
+}

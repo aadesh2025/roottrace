@@ -1,0 +1,69 @@
+{
+  "case_id": "key-error-02",
+  "schema_version": 1,
+  "difficulty": "easy",
+  "category": "missing_key",
+  "repository": {
+    "fixture_path": "fixtures/synthetic-repo",
+    "ref": "v2.14.3",
+    "commit_sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b"
+  },
+  "bug_description": "apply_coupon indexes an optional request body field that the client only sends when a code was typed.",
+  "api_event": "fixtures/error-corpus/key-error-02.json",
+  "expected": {
+    "fingerprint": null,
+    "issue_error_type": "KeyError",
+    "relevant_files": [
+      "api/routes/cart.py"
+    ],
+    "retrieval_quality_min": 0.75,
+    "requires_breadcrumb_signal": false,
+    "root_cause_file": "api/routes/cart.py",
+    "root_cause_function": "apply_coupon",
+    "root_cause_line_range": [
+      47,
+      56
+    ],
+    "root_cause_category": "shape_assumption",
+    "introduced_by_commit": "3c1a9d2f",
+    "evidence_must_cite": [
+      {
+        "kind": "file",
+        "repo_path": "api/routes/cart.py",
+        "line_range": [
+          47,
+          56
+        ]
+      }
+    ],
+    "must_modify_files": [
+      "api/routes/cart.py"
+    ],
+    "may_modify_files": [
+      "tests/test_cart.py"
+    ],
+    "must_not_modify_files": [
+      "services/cart.py",
+      "models/cart.py",
+      ".github/workflows/ci.yml",
+      "requirements.txt"
+    ],
+    "acceptable_fix_strategies": [
+      "explicit_fallback_policy"
+    ],
+    "unacceptable_fix_strategies": [
+      "broad_try_except",
+      "suppress_at_call_site"
+    ],
+    "requires_regression_test": true,
+    "expected_blast_radius_mentions": [],
+    "validation": {
+      "should_pass": true,
+      "max_attempts": 1,
+      "mode": "full"
+    },
+    "confidence_band": "high",
+    "final_status": "awaiting_decision",
+    "should_open_pr": true
+  }
+}

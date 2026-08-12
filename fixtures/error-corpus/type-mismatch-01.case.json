@@ -1,0 +1,75 @@
+{
+  "case_id": "type-mismatch-01",
+  "schema_version": 1,
+  "difficulty": "medium",
+  "category": "type_mismatch",
+  "repository": {
+    "fixture_path": "fixtures/synthetic-repo",
+    "ref": "v2.14.3",
+    "commit_sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b"
+  },
+  "bug_description": "The payment provider serialises amount as a decimal string; charge_cart adds it directly to a Decimal.",
+  "api_event": "fixtures/error-corpus/type-mismatch-01.json",
+  "expected": {
+    "fingerprint": null,
+    "issue_error_type": "TypeError",
+    "relevant_files": [
+      "clients/payment_client.py",
+      "services/checkout.py"
+    ],
+    "retrieval_quality_min": 0.6,
+    "requires_breadcrumb_signal": true,
+    "root_cause_file": "clients/payment_client.py",
+    "root_cause_function": "charge",
+    "root_cause_line_range": [
+      31,
+      44
+    ],
+    "root_cause_category": "contract_drift",
+    "introduced_by_commit": "3c1a9d2f",
+    "evidence_must_cite": [
+      {
+        "kind": "file",
+        "repo_path": "clients/payment_client.py",
+        "line_range": [
+          31,
+          44
+        ]
+      },
+      {
+        "kind": "breadcrumb",
+        "index": 0
+      }
+    ],
+    "must_modify_files": [
+      "services/checkout.py"
+    ],
+    "may_modify_files": [
+      "clients/payment_client.py",
+      "tests/test_checkout.py"
+    ],
+    "must_not_modify_files": [
+      "api/routes/checkout.py",
+      ".github/workflows/ci.yml",
+      "requirements.txt"
+    ],
+    "acceptable_fix_strategies": [
+      "explicit_type_coercion",
+      "raise_typed_exception"
+    ],
+    "unacceptable_fix_strategies": [
+      "broad_try_except",
+      "suppress_at_call_site"
+    ],
+    "requires_regression_test": true,
+    "expected_blast_radius_mentions": [],
+    "validation": {
+      "should_pass": true,
+      "max_attempts": 1,
+      "mode": "full"
+    },
+    "confidence_band": "medium",
+    "final_status": "awaiting_decision",
+    "should_open_pr": true
+  }
+}

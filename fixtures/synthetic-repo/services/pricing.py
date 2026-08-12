@@ -87,3 +87,16 @@ def total_with_rate(subtotal: Decimal, rate: Decimal) -> Decimal:
     return (subtotal * (Decimal("1") + rate)).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
+
+
+def total_from_cache(subtotal: Decimal, region: str) -> Decimal:
+    """Total using the cached rate, when there is one.
+
+    `race-02` surfaces here. This is check-then-use against process-global
+    state: the presence check passes, another request clears the cache between
+    the two reads — a deploy, or a manual invalidation — and the second read
+    returns None. The guard on the line above is what makes it look safe.
+    """
+    if cached_rate(region) is None:
+        raise LookupError(f"no cached rate for {region}")
+    return total_with_rate(subtotal, cached_rate(region))

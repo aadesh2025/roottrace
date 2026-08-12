@@ -263,6 +263,10 @@ Measured by **M14 (abstention correctness, 2/2)** and **M15 (false-fabrication r
 
 ## 6. Error payload example
 
+> **The committed payloads are generated, not written.** `fixtures/corpus/generate.py` runs each trigger, walks the captured `__traceback__`, and writes the event from what actually happened — real frames, real line numbers, real locals, context lines read off disk. §9's rule against hand-written traces is enforced by construction rather than by discipline. Regenerate with `uv run python -m fixtures.corpus.generate`; the output is deterministic, so a fixture refactor shows up as a diff instead of silently invalidating the corpus.
+>
+> The block below is the shape, kept for readability. Two details differ from the generated file and the generated file is right: the route frame is `_build_response` (the handler was split in v2.14.1), and harness frames are filtered exactly as an SDK filters its own. Invented parts are only those a local run cannot know — the hostname, the in-flight request, and the breadcrumbs the SDK would have buffered.
+
 ```jsonc
 // fixtures/error-corpus/null-prop-01.json
 {

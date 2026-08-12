@@ -182,8 +182,12 @@ fixtures-verify: ## Assert every ground-truth path/symbol/line resolves to real 
 	@# baseline, the canonical line numbers `18` §7 pins, the blame ranges, and
 	@# — the criterion that matters — every one of the 25 bugs REPRODUCED by
 	@# running the code rather than asserted from a manifest (A1 §9).
-	@# T3.2 extends it to the ground-truth files of the error corpus.
-	$(UV) run pytest tests/integration/test_fixture_repo.py -q
+	@# From T3.2 it also covers the error corpus: every payload against the
+	@# ingest schema, and every ground-truth path, symbol and line range
+	@# resolved against the AST of the code it names. Ground truth that drifts
+	@# does not fail loudly — it quietly changes what the harness measures.
+	$(UV) run pytest tests/integration/test_fixture_repo.py \
+	                tests/integration/test_fixture_corpus.py -q
 
 # ── Evaluation ─────────────────────────────────────────────────────────────
 

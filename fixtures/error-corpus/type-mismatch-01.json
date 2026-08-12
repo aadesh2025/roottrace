@@ -1,0 +1,79 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_type_mismatch_01",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "TypeError",
+        "message": "unsupported operand type(s) for +: 'decimal.Decimal' and 'str'",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/services/checkout.py\", line 112, in charge_cart\n    return total + captured\nTypeError: unsupported operand type(s) for +: 'decimal.Decimal' and 'str'\n",
+        "stack_frames": [
+          {
+            "file": "/app/services/checkout.py",
+            "line": 112,
+            "function": "charge_cart",
+            "in_app": true,
+            "context_line": "        return total + captured",
+            "pre_context": [
+              "        receipt = self.payment_client.charge(cart.id, str(total), self.currency)",
+              "        captured = receipt[\"amount\"]"
+            ],
+            "post_context": [
+              "",
+              "    def capture_reference(self, receipt: dict[str, object]) -> str:"
+            ],
+            "vars": {
+              "cart": "<Cart id=c_8821 region='eu-west'>",
+              "user": "User(id='u_9f2b1c', email='ada@example.com', plan='pro', is_authenticated=True, discount_profile=DiscountProfile(tier='gold', percent_off=10))",
+              "total": "Decimal('50.19')",
+              "receipt": "{'id': 'ch_1', 'amount': '49.99'}",
+              "captured": "'49.99'"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "/api/v2/checkout",
+        "route_pattern": "/api/v2/checkout",
+        "status_code": 500,
+        "duration_ms": 780,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:22.180Z",
+          "category": "http",
+          "message": "POST payments/charges \u2192 200 amount=\"49.99\"",
+          "level": "info"
+        }
+      ],
+      "tags": {
+        "region": "us-east-1",
+        "tenant_tier": "pro"
+      },
+      "extra": {
+        "provider": "stripe"
+      }
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_regression_03",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "ValueError",
+        "message": "cart c_8821 displays 49.99 but checkout charges 59.9880",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/services/cart.py\", line 80, in assert_display_matches_charge\n    raise ValueError(\nValueError: cart c_8821 displays 49.99 but checkout charges 59.9880\n",
+        "stack_frames": [
+          {
+            "file": "/app/services/cart.py",
+            "line": 80,
+            "function": "assert_display_matches_charge",
+            "in_app": true,
+            "context_line": "            raise ValueError(",
+            "pre_context": [
+              "        displayed = self.subtotal_with_tax(cart, tax_rate)",
+              "        if displayed != charged:"
+            ],
+            "post_context": [
+              "                f\"cart {cart.id} displays {displayed} but checkout charges {charged}\"",
+              "            )"
+            ],
+            "vars": {
+              "cart": "<Cart id=c_8821 region='eu-west'>",
+              "tax_rate": "Decimal('0.20')",
+              "charged": "Decimal('59.9880')",
+              "displayed": "Decimal('49.99')"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "/api/v2/checkout",
+        "route_pattern": "/api/v2/checkout",
+        "status_code": 500,
+        "duration_ms": 61,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:22.300Z",
+          "category": "deploy",
+          "message": "v2.14.2 rolled out 6 days ago",
+          "level": "info"
+        },
+        {
+          "ts": "2026-08-04T09:14:22.440Z",
+          "category": "ui",
+          "message": "cart page displayed 49.99",
+          "level": "info"
+        }
+      ],
+      "tags": {
+        "region": "eu-west-1",
+        "tenant_tier": "pro"
+      },
+      "extra": {
+        "displayed": "49.99",
+        "charged": "59.99"
+      }
+    }
+  ]
+}

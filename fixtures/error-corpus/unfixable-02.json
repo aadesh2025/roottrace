@@ -1,0 +1,79 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_unfixable_02",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "UpstreamUnavailable",
+        "message": "inventory is unavailable",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/clients/inventory_client.py\", line 67, in ping\n    raise UpstreamUnavailable(\"inventory\") from exc\nclients.errors.UpstreamUnavailable: inventory is unavailable\n",
+        "stack_frames": [
+          {
+            "file": "/app/clients/inventory_client.py",
+            "line": 67,
+            "function": "ping",
+            "in_app": true,
+            "context_line": "            raise UpstreamUnavailable(\"inventory\") from exc",
+            "pre_context": [
+              "            return self._client.get(\"/health\").status_code == 200",
+              "        except httpx.ConnectError as exc:"
+            ],
+            "post_context": [
+              "        except httpx.TimeoutException as exc:",
+              "            raise UpstreamTimeout(\"inventory\", self._timeout) from exc"
+            ],
+            "vars": {}
+          }
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "/health/ready",
+        "route_pattern": "/health/ready",
+        "status_code": 500,
+        "duration_ms": 5002,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:17.400Z",
+          "category": "infra",
+          "message": "cluster DNS resolver reported unhealthy",
+          "level": "error"
+        },
+        {
+          "ts": "2026-08-04T09:14:22.400Z",
+          "category": "http",
+          "message": "GET inventory/health \u2192 temporary failure in name resolution",
+          "level": "error"
+        }
+      ],
+      "tags": {
+        "region": "eu-west-1",
+        "tenant_tier": "enterprise"
+      },
+      "extra": {
+        "resolver": "coredns"
+      }
+    }
+  ]
+}

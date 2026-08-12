@@ -1,0 +1,81 @@
+{
+  "events": [
+    {
+      "event_id": "evt_fixture_key_error_03",
+      "timestamp": "2026-08-04T09:14:22.481Z",
+      "environment": "production",
+      "service": "checkout-api",
+      "release": "v2.14.3",
+      "level": "error",
+      "error": {
+        "type": "KeyError",
+        "message": "'user'",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/services/export.py\", line 61, in render_row\n    email = order[\"user\"][\"email\"]\nKeyError: 'user'\n",
+        "stack_frames": [
+          {
+            "file": "/app/services/export.py",
+            "line": 61,
+            "function": "render_row",
+            "in_app": true,
+            "context_line": "        email = order[\"user\"][\"email\"]",
+            "pre_context": [
+              "        all, and this reaches two levels down without checking either.",
+              "        \"\"\""
+            ],
+            "post_context": [
+              "        return f\"{order['id']},{email},{order['total']},{order['currency']},{order['status']}\"",
+              ""
+            ],
+            "vars": {
+              "order": "{'id': 'ord_3', 'total': '5.00', 'currency': 'USD', 'status': 'paid'}"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": "/api/v2/export/orders",
+        "route_pattern": "/api/v2/export/orders",
+        "status_code": 500,
+        "duration_ms": 3120,
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "runtime": {
+        "language": "python",
+        "language_version": "3.12.4",
+        "framework": "fastapi",
+        "framework_version": "0.111.0",
+        "os": "linux",
+        "hostname": "checkout-api-7d9f-x4k2"
+      },
+      "user_context": {
+        "user_hash": "u_9f2b1c",
+        "plan": "pro",
+        "is_authenticated": true
+      },
+      "breadcrumbs": [
+        {
+          "ts": "2026-08-04T09:14:19.200Z",
+          "category": "db",
+          "message": "SELECT * FROM orders LIMIT 5000 (2.4s)",
+          "level": "info"
+        },
+        {
+          "ts": "2026-08-04T09:14:22.100Z",
+          "category": "job",
+          "message": "rendering CSV rows",
+          "level": "info"
+        }
+      ],
+      "tags": {
+        "region": "us-east-1",
+        "tenant_tier": "enterprise"
+      },
+      "extra": {
+        "guest_orders": 41
+      }
+    }
+  ]
+}

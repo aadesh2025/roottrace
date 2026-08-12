@@ -129,13 +129,22 @@ def _expect_exception(case_id: str, fn: Callable[[], object], detail: str) -> Re
 
 
 def null_prop_01() -> Reproduction:
-    """TaxClient.get_rate returns None on 5xx; calculate_total adds it."""
+    """TaxClient.get_rate returns None on 5xx; calculate_total adds it.
+
+    Entered through the route rather than the service, so the traceback has
+    both in-app frames the reference payload in `A1` §6 shows:
+    `api/routes/checkout.py` and `services/checkout.py`. A trigger that called
+    the service directly would produce a shorter, tidier trace than production
+    ever sends — and this is the case every document quotes.
+    """
+    from api.routes import checkout as checkout_route
+
     tax = TaxClient("http://tax.internal")
     _responding(tax, lambda request: httpx.Response(503, json={"error": "unavailable"}))
     service = CheckoutService(tax, PaymentClient("http://payments.internal"))
     return _expect_exception(
         "null-prop-01",
-        lambda: service.calculate_total(_cart(), _user()),
+        lambda: checkout_route._build_response(_cart(), _user(), service),
         "tax service 503 -> get_rate returns None -> Decimal + None",
     )
 
@@ -314,12 +323,19 @@ def external_03() -> Reproduction:
     _responding(client, unresolvable)
 
     calls = 5
+    surfaced: BaseException | None = None
     for _ in range(calls):
-        _capture(lambda: client.reserve("sku-1", 1))
+        surfaced = _capture(lambda: client.reserve("sku-1", 1))
 
     if attempts < calls:
         raise AssertionError("external-03: something short-circuited, so a breaker exists")
+    if surfaced is None:
+        raise AssertionError("external-03: the dead upstream did not surface")
 
+    # The exception is what the tenant's error tracker receives; the attempt
+    # count is what shows the defect. Both are recorded: a payload without the
+    # former cannot enter the pipeline, and a case without the latter would be
+    # indistinguishable from an ordinary upstream outage.
     return Reproduction(
         case_id="external-03",
         kind="behaviour",
@@ -327,6 +343,7 @@ def external_03() -> Reproduction:
             f"{calls} calls against a dead upstream made {attempts} connection attempts; "
             "nothing opens after the first failure, so the checkout path serialises on it"
         ),
+        exception=surfaced,
     )
 
 
@@ -414,29 +431,65 @@ def race_01() -> Reproduction:
             "race-01: only one seller succeeded, so read-check-write held together"
         )
 
+    # How it reaches an error tracker. The oversell itself is silent — the
+    # ledger is simply wrong — and the first customer to check out afterwards
+    # is the one who sees a failure, which is why these are reported hours
+    # after the concurrency that caused them.
+    oversold_by = len(sold) - 1
+    surfaced = _capture(lambda: service.decrement("sku-1", 1))
+    if surfaced is None:
+        raise AssertionError("race-01: the corrupted ledger did not surface")
+
     return Reproduction(
         case_id="race-01",
         kind="behaviour",
         detail=(
-            f"{len(sold)} concurrent checkouts each sold the last unit of a stock of 1; "
-            f"the ledger now reads {service.available('sku-1')}"
+            f"{len(sold)} concurrent checkouts each sold the last unit of a stock of 1, "
+            f"overselling by {oversold_by}; the next customer is the one who fails"
         ),
+        exception=surfaced,
     )
 
 
 def race_02() -> Reproduction:
-    """Module-level cache leaks between requests."""
+    """Process-global cache, read twice with an invalidation in between.
+
+    The leak itself is silent — a rate cached while serving one request is
+    visible to the next. It surfaces as `total_from_cache` check-then-use: the
+    presence check passes, another request clears the cache between the two
+    reads, and the second read returns None.
+
+    Deterministic, not raced: `clear_rate_cache` is called from inside the
+    lookup the guard trusts, which is exactly the interleaving the real
+    scheduler is free to produce against unsynchronised global state.
+    """
     pricing.clear_rate_cache()
     pricing.cache_rate("eu-west", Decimal("0.20"))
-    leaked = pricing.cached_rate("eu-west")
-    pricing.clear_rate_cache()
-    if leaked is None:
+    if pricing.cached_rate("eu-west") is None:
         raise AssertionError("race-02: the cache did not retain state across callers")
-    return Reproduction(
-        case_id="race-02",
-        kind="behaviour",
-        detail=f"a rate cached while serving one request is visible to the next ({leaked})",
-    )
+
+    original_cached_rate = pricing.cached_rate
+    calls = {"n": 0}
+
+    def invalidating_lookup(region: str) -> Decimal | None:
+        # First read: the value is present, so the guard lets the caller
+        # through. Second read: a concurrent deploy has flushed the cache.
+        calls["n"] += 1
+        value = original_cached_rate(region)
+        if calls["n"] == 1:
+            pricing.clear_rate_cache()
+        return value
+
+    pricing.cached_rate = invalidating_lookup  # type: ignore[assignment]
+    try:
+        return _expect_exception(
+            "race-02",
+            lambda: pricing.total_from_cache(Decimal("49.99"), "eu-west"),
+            "check-then-use on an unsynchronised process-global cache",
+        )
+    finally:
+        pricing.cached_rate = original_cached_rate  # type: ignore[assignment]
+        pricing.clear_rate_cache()
 
 
 # ── Boundary ───────────────────────────────────────────────────────────────
@@ -457,28 +510,54 @@ def boundary_01() -> Reproduction:
     if first_sku in reachable:
         raise AssertionError("boundary-01: the first row is reachable, so the offset is correct")
 
-    return Reproduction(
-        case_id="boundary-01",
-        kind="behaviour",
-        detail=(
+    # The silent half is above: the first row is unreachable. It surfaces at
+    # the "jump to item" control, which indexes the page it asked for — and
+    # the last page comes back empty.
+    from api.routes import cart as cart_route
+
+    service = cart_route.get_cart_service()
+    service.create("c_page", "eu-west")
+    live = service.get("c_page")
+    service.add_item(live, "sku-1", 1, Decimal("19.99"))
+    service.add_item(live, "sku-2", 1, Decimal("10.01"))
+
+    return _expect_exception(
+        "boundary-01",
+        lambda: cart_route.first_item_on_page("c_page", offset=len(live.items)),
+        (
             f"pagination is 1-based and slices as 0-based: {first_sku} is returned by no "
-            f"valid page (reachable: {sorted(reachable)}), and the last page is short"
+            f"valid page (reachable: {sorted(reachable)}), and the last page is empty"
         ),
     )
 
 
 def boundary_02() -> Reproduction:
-    """Chunking drops the last element of every slice."""
+    """Chunking drops the last element of every slice.
+
+    Silent at batch sizes above one — the export is simply short, and nobody
+    counted the rows. At the size the throttled overnight export uses, every
+    chunk is empty and the batched writer indexes one.
+    """
     service = ExportService(_settings())
     rows = ["a", "b", "c", "d"]
-    chunks = service.chunk(rows, 2)
-    flattened = [row for chunk in chunks for row in chunk]
+    flattened = [row for chunk in service.chunk(rows, 2) for row in chunk]
     if len(flattened) == len(rows):
         raise AssertionError("boundary-02: no rows were dropped")
-    return Reproduction(
-        case_id="boundary-02",
-        kind="behaviour",
-        detail=f"chunking 4 rows by 2 yielded {flattened} — one per chunk is lost",
+
+    orders = [
+        {
+            "id": f"ord_{i}",
+            "user": {"email": f"user{i}@example.com"},
+            "total": "10.00",
+            "currency": "USD",
+            "status": "paid",
+        }
+        for i in range(4)
+    ]
+    return _expect_exception(
+        "boundary-02",
+        lambda: service.export_batched(orders, size=1),
+        f"chunking 4 rows by 2 yielded {flattened}; at size 1 every chunk is empty",
     )
 
 
@@ -528,13 +607,17 @@ def regression_02() -> Reproduction:
     quoted = service.estimate_total(cart)
     if quoted != cart.subtotal():
         raise AssertionError("regression-02: the outage did not produce an untaxed quote")
-    return Reproduction(
-        case_id="regression-02",
-        kind="behaviour",
-        detail=(
-            f"tax service 503 -> quote falls back to the untaxed subtotal ({quoted}). "
-            "tests/test_quote.py asserts this contract, so the obvious fix for "
-            "null-prop-01 breaks it and the repair loop has to route around it"
+
+    # Checkout still adds tax, so the two disagree by exactly the tax amount
+    # and the reconciliation finance added stops every order in the region.
+    charged = cart.subtotal() * Decimal("1.20")
+    return _expect_exception(
+        "regression-02",
+        lambda: service.reconcile(cart, charged),
+        (
+            f"tax service 503 -> quote falls back to the untaxed subtotal ({quoted}) while "
+            "checkout charges the taxed one. tests/test_quote.py asserts that fallback, so "
+            "the obvious fix for null-prop-01 breaks it and the repair loop must route around it"
         ),
     )
 
@@ -546,12 +629,15 @@ def regression_03() -> Reproduction:
     with_tax = service.subtotal_with_tax(cart, Decimal("0.20"))
     if with_tax != cart.subtotal():
         raise AssertionError("regression-03: subtotal_with_tax still applies the rate")
-    return Reproduction(
-        case_id="regression-03",
-        kind="behaviour",
-        detail=(
+
+    charged = cart.subtotal() * Decimal("1.20")
+    return _expect_exception(
+        "regression-03",
+        lambda: service.assert_display_matches_charge(cart, Decimal("0.20"), charged),
+        (
             f"subtotal_with_tax ignores its tax_rate argument and returns {with_tax}; "
-            "the name and signature are unchanged since v2.14.1"
+            "the name and signature are unchanged since v2.14.1, so the cart page shows "
+            "the untaxed figure while checkout charges the taxed one"
         ),
     )
 
@@ -583,12 +669,25 @@ def resource_01() -> Reproduction:
     large = peak_for(5_000)
     if large <= small * 2:
         raise AssertionError("resource-01: memory did not grow with the export size")
-    return Reproduction(
-        case_id="resource-01",
-        kind="behaviour",
-        detail=(
+
+    # How it is actually reported. The gateway's size cap is checked only
+    # after every row has been rendered and held, so the guard bounds the
+    # RESPONSE and not the allocation: a large tenant's export peaks first and
+    # fails afterwards, at the end of a long, expensive request.
+    #
+    # This is the modelling decision for the case, stated plainly: a genuine
+    # MemoryError cannot be produced deterministically or safely in a test, so
+    # the payload carries the failure the tenant's error tracker really
+    # receives. The defect being measured is the unbounded accumulation, which
+    # the growth above demonstrates directly.
+    orders = [order(i) for i in range(40_000)]
+    return _expect_exception(
+        "resource-01",
+        lambda: service.export_bounded(orders),
+        (
             f"peak memory grows with the export: {small} bytes for 500 orders, "
-            f"{large} for 5,000 — every row is held until the last one is rendered"
+            f"{large} for 5,000 — every row is held until the last one is rendered, "
+            "and the size guard runs only after the peak"
         ),
     )
 
@@ -695,6 +794,14 @@ EXPECTED_EXCEPTION: dict[str, str] = {
     "key-error-03": "KeyError",
     "external-01": "UpstreamTimeout",
     "external-02": "RateLimited",
+    "external-03": "UpstreamUnavailable",
+    "race-01": "ValueError",
+    "race-02": "TypeError",
+    "boundary-01": "IndexError",
+    "boundary-02": "IndexError",
+    "regression-02": "ValueError",
+    "regression-03": "ValueError",
+    "resource-01": "ValueError",
     "config-01": "KeyError",
     "config-02": "TypeError",
     "regression-01": "TypeError",
