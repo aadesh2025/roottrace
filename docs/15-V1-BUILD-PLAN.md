@@ -252,6 +252,18 @@ The full `GitHubClient` interface, backed by the local fixture tree. Reads retur
 
 **Accept:** `fetch_file`, `fetch_tree`, `blame`, `compare`, `create_blob/tree/commit/ref`, `create_pull_request` all work against fixtures. Swapping `GITHUB_MODE` changes no application code.
 
+**Done — Phase 5 closes here.** The `GitHubGateway` protocol, the domain types, `FixtureTransport` and the factory, with the GC1–GC12 contract suite from `08` §7.4 parameterised over transports.
+
+- **Object ids are real git object ids**, not invented. GC1 requires a byte-identical `sha` across transports and GitHub returns the git blob id, so plausible-looking hex would pass every test we can write today and diverge the day `live` exists. Blobs, trees and commits all use git's encodings — including its tree-entry sort order, where a directory sorts as though it ended in `/`. Cross-checked against `git hash-object` itself, because testing a reimplementation against the same reimplementation proves only self-consistency.
+- **The seam is enforced, not trusted.** `08` §7.1 calls for a lint rule; `test_transport_parity.py` is it. One test forbids naming `github_mode` outside the factory, a second forbids *comparing* against it anywhere — so `/health/ready` may report the mode but cannot quietly become `if settings.github_mode == "fixture"` — and a third forbids importing a transport directly. Verified with a deliberate probe: adding a branch to a worker module fails two of the three.
+- **`settings.py` is exempt from the comparison rule, narrowly.** Its two branches are the C5 tier interlocks (`evaluation` refuses `live`, `live` refuses `fixture`), which are safety invariants about what a deployment may touch, not a choice of transport. The no-transport-import rule is what keeps that true.
+- **`replay` and `live` raise `TransportUnavailable` rather than silently falling back.** A deployment that asked for `live` and quietly got fixtures would report success for work it never did. They are listed and skipped in the contract suite rather than omitted — an omitted transport is one nobody remembers to add.
+- **Settings reach the factory as an object**, typed by a local Protocol, so `roottrace_worker` does not import `roottrace_api` and the attribute access stays in one file.
+
+`create_pull_request` returns a `PullRequestRef` carrying `is_simulated=true`; **persisting the `pull_request_records` row is T8.1** (stage 12 `publish`), which is where the PR body is rendered.
+
+**One limitation, stated rather than hidden:** the fixture tree has a single revision on disk, so `ref` is resolved, validated and recorded but does not select content — asking for `v2.14.1` returns today's bytes. `blame` and `compare` do distinguish revisions, since they read the simulated history. Nothing in V1 reads a historical ref, but a transport that silently returned the wrong revision would be exactly the failure `08` §3.3 warns about, so it is documented at the top of the module.
+
 ---
 
 ## 6. Week 4 — Retrieval (the hardest week)

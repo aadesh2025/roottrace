@@ -100,6 +100,12 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Tests legitimately assert, use fixtures, and hard-code sample values.
 "**/tests/**" = ["S101", "S105", "S106"]
+# N818 wants an `Error` suffix on every exception. These names are the frozen
+# contract in docs/08 §7.4 — GC2 names FileNotFound, GC9 AlreadyExists, GC10
+# RateLimited, GC11 NoDiff — and the contract tests assert against them by
+# name. Renaming for a style rule would put the code and the spec out of step,
+# which is the defect this project treats most seriously.
+"apps/worker/roottrace_worker/github/errors.py" = ["N818"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"
