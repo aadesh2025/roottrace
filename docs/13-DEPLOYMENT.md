@@ -233,7 +233,7 @@ class Settings(BaseSettings):
     supabase_url: HttpUrl
     supabase_anon_key: SecretStr
     supabase_service_role_key: SecretStr | None = None    # worker only
-    supabase_jwks_url: HttpUrl | None = None              # api only (RS256, B12)
+    supabase_jwks_url: HttpUrl | None = None              # api only (asymmetric, B12)
 
     github_app_id: int | None = None
     github_private_key: SecretStr | None = None

@@ -140,16 +140,17 @@ The parameterised cross-tenant test from `14` §4.1, **plus** the membership esc
 
 ### T1.4 Auth
 
-Supabase GoTrue. Login, callback, session, logout. **RS256/JWKS** verification middleware in `api` (B12).
+Supabase GoTrue. Login, callback, session, logout. **Asymmetric JWKS** verification middleware in `api` (B12) — the algorithm is read from the matching JWKS entry, never from the token header and never hard-coded. GoTrue signs ES256 in the deployed build; see the B12 addendum in `A3` §1.
 
-Local authentication follows `A3` §5.1: GitHub OAuth when `RT_GITHUB_CLIENT_ID`/`SECRET` are configured, Supabase magic link otherwise. Both paths issue the same RS256 JWT with the same `sub`, so `auth.uid()` and every RLS policy behave identically — **there is no dev-mode auth bypass.**
+Local authentication follows `A3` §5.1: GitHub OAuth when `RT_GITHUB_CLIENT_ID`/`SECRET` are configured, Supabase magic link otherwise. Both paths issue the same JWT with the same `sub`, so `auth.uid()` and every RLS policy behave identically — **there is no dev-mode auth bypass.**
 
-Refresh rotation and reuse detection are **GoTrue's responsibility** (A5). We configure and verify them; we do not build a token store.
+Refresh rotation and reuse detection are **GoTrue's responsibility**. We configure and verify them; we do not build a token store.
 
 **Accept:**
 - Sign in (either path) → JWT issued → `/v1/me` returns the user → RLS scopes correctly.
 - A token signed with the wrong key is rejected; a `kid` miss triggers exactly one JWKS refetch.
-- Reused refresh token revokes the family — **verified against GoTrue**, not reimplemented.
+- Refresh tokens rotate — **verified against GoTrue**, not reimplemented.
+- **OPEN: reuse detection does not work and is not verified.** Replaying a consumed refresh token returns 200 with `GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL` at both 10 and 0 (checked inside the container), which suggests 0 means *unlimited* rather than *none* in this build — so setting 0 would weaken the control while appearing to tighten it. Until resolved, a stolen refresh token is replayable and `11` T15's mitigation is incomplete. Do not close T1.4 as fully done on this criterion.
 - `api` boots with `RT_SUPABASE_JWKS_URL` and refuses to boot if handed a service-role key or a legacy `RT_SUPABASE_JWT_SECRET`.
 - Missing GitHub OAuth credentials do not block any of the above.
 

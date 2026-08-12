@@ -3,9 +3,15 @@ name = "roottrace-api"
 version = "0.1.0"
 description = "RootTrace AI — public API (FastAPI). Never holds the service-role key."
 requires-python = ">=3.12,<3.13"
-# Runtime dependencies arrive with T1.5 (docs/15 §3). Phase 1 is tooling only;
-# an unused FastAPI pin added now would be stale before its first import.
-dependencies = []
+dependencies = [
+  "fastapi>=0.120,<1.0",
+  "uvicorn[standard]>=0.38,<1.0",
+  "pydantic-settings>=2.7,<3.0",
+  # PyJWT over python-jose: a narrower surface, actively maintained, and jose
+  # has a CVE history. `crypto` pulls in `cryptography` for RS256/ES256 (B12).
+  "pyjwt[crypto]>=2.10,<3.0",
+  "httpx>=0.28,<1.0",
+]
 
 [build-system]
 requires = ["hatchling"]

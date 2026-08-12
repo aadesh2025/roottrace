@@ -63,9 +63,9 @@
 |---|---|
 | Provider | Supabase GoTrue — GitHub OAuth (primary), email magic link (fallback) |
 | Passwords | **None.** No password means no password database, no credential stuffing, no reset flow to abuse |
-| Access token | RS256 JWT, 1 h, verified against cached JWKS |
+| Access token | 1 h JWT, asymmetric-signed (ES256 in the current GoTrue build; RS256 also accepted). The verifier reads the algorithm from the matching JWKS entry, never from the token's own header |
 | Refresh token | 30 d, **rotating** — each use issues a new one and invalidates the predecessor |
-| Reuse detection | Presenting a consumed refresh token revokes the entire token family and forces re-auth. This is how a stolen token becomes a one-time-use liability instead of persistent access |
+| Reuse detection | **OPEN — not currently working, not verified (T1.4).** Spec intent: presenting a consumed refresh token revokes the entire token family and forces re-auth. As deployed, replaying a consumed token returns `200` regardless of `GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL`. A stolen refresh token is replayable until this is resolved — see `15` T1.4 and `infra/supabase/config.toml` |
 | Storage | `httpOnly; Secure; SameSite=Lax` cookies. Never `localStorage` — an XSS then cannot exfiltrate the session |
 | CSRF | `SameSite=Lax` + double-submit token on state-changing requests |
 | Session revocation | Sign out everywhere invalidates all families for the user |
@@ -447,9 +447,9 @@ Every security claim in this document set, with **how it is enforced** and **whi
 | # | Control | Enforced by | Test |
 |---|---|---|---|
 | SC1 | No passwords exist | GoTrue OAuth + magic link only; no password column | `test_no_password_auth_endpoint` |
-| SC2 | Access tokens are RS256, verified against JWKS (B12) | `RT_SUPABASE_JWKS_URL`; `RT_SUPABASE_JWT_SECRET` retired | `test_hs256_token_rejected`, `test_kid_miss_refetches_jwks` |
+| SC2 | Access tokens are asymmetric-signed, algorithm taken from JWKS, never from the token header (B12) | `RT_SUPABASE_JWKS_URL`; `RT_SUPABASE_JWT_SECRET` retired | `test_algorithm_comes_from_the_key_set_not_the_token`, `test_symmetric_keys_are_refused_by_the_cache`, `test_kid_miss_refetches_jwks` |
 | SC3 | API holds no token-signing capability | Boot invariant: no shared secret, public key only | `test_api_settings_reject_jwt_secret` |
-| SC4 | Refresh rotation + reuse detection | **GoTrue** (A5) — we configure and verify, never reimplement | `test_reused_refresh_revokes_family` |
+| SC4 | Refresh rotation + reuse detection | **GoTrue** — we configure and verify, never reimplement. Rotation is verified; reuse detection is **OPEN**, see the table above | Rotation: verified manually. Reuse detection: no passing test exists yet — the control does not currently work |
 | SC5 | Sessions in `httpOnly; Secure; SameSite=Lax` cookies | Cookie flags set server-side | `test_no_token_in_localstorage` (Playwright) |
 | SC6 | Ingest keys cannot read anything | Scope `events:write`; dashboard router requires JWT | `test_ingest_key_on_dashboard_endpoint_403` (every endpoint) |
 | SC7 | Ingest keys stored only as `sha256` | Column is `key_hash`; plaintext returned once | `test_plaintext_key_never_persisted` |

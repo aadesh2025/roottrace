@@ -31,6 +31,19 @@ RT_COVERAGE_MIN_OVERALL ?= 0
 # to auth, RLS and tenancy code. Also monotonic.
 RT_COVERAGE_MIN_SECURITY ?= 95
 
+# The Supabase admin key, read out of the running stack at call time and passed
+# to the integration suite. It is deliberately not a literal anywhere in the
+# repository: a key pasted into a test file is a real credential in git, and
+# allowlisting that file in .gitleaks.toml would be the fail-open version of the
+# same mistake — the next key pasted there would be ignored too.
+#
+# NOT prefixed `RT_`. That namespace belongs to the Settings model, and the
+# unrecognised-RT_* boot invariant rejects anything in it without a matching
+# field — correctly, since it cannot tell a test harness variable from a stale
+# application one. Harness variables live outside the prefix.
+SUPABASE_SECRET_CMD = $(SUPABASE) status --workdir infra -o env \
+  | sed -n 's/^SECRET_KEY="\(.*\)"$$/\1/p'
+
 .DEFAULT_GOAL := help
 .PHONY: help bootstrap check fmt fmt-check lint typecheck \
         test-unit test-integration test-security test-e2e \
@@ -94,26 +107,38 @@ test-integration: ## pytest -m integration (against the local Supabase stack)
 	  echo "test-integration: Supabase is not running. Start it with:"; \
 	  echo "    make db-reset"; \
 	  exit 1; }
-	$(UV) run pytest -m integration
+	ROOTTRACE_TEST_ADMIN_KEY="$$($(SUPABASE_SECRET_CMD))" $(UV) run pytest -m integration
 
 test-security: ## pytest -m security — RLS, sandbox isolation, injection corpus
 	@$(SUPABASE) status --workdir infra >/dev/null 2>&1 || { \
 	  echo "test-security: Supabase is not running. Start it with: make db-reset"; \
 	  exit 1; }
-	$(UV) run pytest -m security
-	@# The >=95% security-critical floor (docs/A3 §6.1) applies from this phase.
-	@# It currently measures nothing, and that is stated rather than papered
-	@# over: the RLS implementation is SQL, and there is no Python auth code
-	@# until T1.4. Rather than assert 95% over an empty set — the vacuous pass
-	@# this whole suite exists to prevent — the gate detects its own subjects and
-	@# turns itself on when they appear.
-	@if ls apps/api/roottrace_api/auth*.py apps/worker/roottrace_worker/tenancy*.py \
-	      >/dev/null 2>&1; then \
-	  $(UV) run pytest -m security \
-	    --cov=apps/api/roottrace_api --cov=apps/worker/roottrace_worker \
+	ROOTTRACE_TEST_ADMIN_KEY="$$($(SUPABASE_SECRET_CMD))" $(UV) run pytest -m security
+	@# The >=95% security-critical floor (docs/A3 §6.1), which applies to auth,
+	@# RLS and tenancy code from the phase that introduces each.
+	@#
+	@# The detection pattern was `auth*.py`, which matches a FILE called
+	@# auth.py. T1.4 shipped a `auth/` PACKAGE, so the glob missed it and the
+	@# gate stayed off through the entire ticket it was written to guard —
+	@# green, and proving nothing. Fixed to `auth/*.py` and reduced to a single
+	@# subject, because `ls a b` exits non-zero when EITHER is missing: pairing
+	@# it with a not-yet-existing worker path would have kept it off anyway.
+	@# Add the worker's tenancy module here as a second `||` clause when
+	@# TenantRepository lands.
+	@#
+	@# Scoped to the auth package, not the whole api package: a 95% floor spread
+	@# across unrelated modules is not the control A3 §6.1 describes, and would
+	@# fail for reasons with nothing to do with auth.
+	@#
+	@# `-m "security or unit"` because the auth unit tests carry the `unit`
+	@# marker. Measuring auth coverage from the security suite alone reports a
+	@# number far below the truth and gates on noise.
+	@if ls apps/api/roottrace_api/auth/*.py >/dev/null 2>&1; then \
+	  ROOTTRACE_TEST_ADMIN_KEY="$$($(SUPABASE_SECRET_CMD))" $(UV) run pytest -m "security or unit" \
+	    --cov=apps/api/roottrace_api/auth \
 	    --cov-fail-under=$(RT_COVERAGE_MIN_SECURITY); \
 	else \
-	  echo "security coverage gate: no Python auth/tenancy modules yet — enabled by T1.4."; \
+	  echo "security coverage gate: no Python auth modules yet — enabled by T1.4."; \
 	fi
 
 test-e2e: ## playwright test

@@ -189,7 +189,7 @@ Issues found during the Phase 0 specification review, with resolution and owning
 | B9 | Cost breaker check-then-act; overshoot scaled with concurrency | Atomic pre-reservation + reconcile on every terminal path | `12` §5.3, `06` §8.2a |
 | B10 | `/work` tmpfs mount hid the copied input bundle | Stage at `/opt/roottrace/`; 2 new isolation checks | `07` §7–§8 |
 | B11 | 9 gates could not fit a 45 s kill (G6/G7 run twice) | Hard kill **90 s**, p95 target **45 s** | `07` §L6, `03` §S8 |
-| B12 | JWT model contradicted itself (JWKS/RS256 vs HS256 secret) | RS256 + JWKS canonical; `RT_SUPABASE_JWT_SECRET` retired | `A3` §1, `11` §3.1 |
+| B12 | JWT model contradicted itself (JWKS/RS256 vs HS256 secret) | Asymmetric JWKS canonical, algorithm read from the key entry (ES256 in the deployed GoTrue build); `RT_SUPABASE_JWT_SECRET` retired | `A3` §1, `11` §3.1 |
 | B13 | Partitions inherit neither RLS nor policies — direct partition query bypassed all tenancy, and the §12.9 assertion would have aborted the first migration | `rt_admin.secure_partition()` at creation; maintenance job creates and secures in one function; second assertion catches enabled-with-no-policy | `04` §12.9–12.10 |
 
 ### Contradictions

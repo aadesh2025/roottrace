@@ -1023,7 +1023,7 @@ create policy organizations_write on organizations for all
   using      (rt_auth.is_org_owner(id))
   with check (rt_auth.is_org_owner(id));
 
--- organization_members: read own row, or co-members of your orgs
+-- organization_members: own row only (co-member visibility deferred to V2)
 alter table organization_members enable row level security;
 alter table organization_members force  row level security;
 
@@ -1057,7 +1057,7 @@ create policy gh_installations_write on github_installations for all
   using      (rt_auth.is_org_owner(organization_id))
   with check (rt_auth.is_org_owner(organization_id));
 
--- project_members: read own row, or co-members of your projects
+-- project_members: own row only (co-member visibility deferred to V2)
 alter table project_members enable row level security;
 alter table project_members force  row level security;
 

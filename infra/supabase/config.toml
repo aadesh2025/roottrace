@@ -175,6 +175,18 @@ jwt_expiry = 3600
 enable_refresh_token_rotation = true
 # Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
 # Requires enable_refresh_token_rotation = true.
+#
+# LEFT AT THE DEFAULT, and the reason is an unresolved finding rather than a
+# preference — see docs/15 T1.4 "open".
+#
+# docs/11 T15 and §3.1 require that a consumed refresh token be rejected. It is
+# not: replaying one returns 200 with GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_
+# INTERVAL set to both 10 and 0 (verified inside the container's env). That
+# strongly suggests 0 means "unlimited reuse" here rather than "no reuse", so
+# setting it to 0 would WEAKEN the control while appearing to tighten it.
+#
+# Not changed on a guess. Rotation itself is verified — each refresh issues a
+# new token — and that much is asserted by the test suite.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
 enable_signup = true

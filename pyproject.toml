@@ -57,6 +57,7 @@ dev = [
   # depends on Supabase roles and the auth schema, which a bare testcontainer
   # does not have (deviation from `14` §4, noted there).
   "psycopg[binary]>=3.2,<4.0",
+  "httpx>=0.28",
 ]
 
 # ── ruff ───────────────────────────────────────────────────────────────────

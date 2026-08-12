@@ -61,11 +61,13 @@ A V1 deployment is therefore legitimately `RT_ENVIRONMENT=production` + `RT_DEPL
 | `RT_SUPABASE_URL` | HttpUrl | ✅ | |
 | `RT_SUPABASE_ANON_KEY` | SecretStr | ✅ | Public by design; safe in the browser |
 | `RT_SUPABASE_SERVICE_ROLE_KEY` | SecretStr | ✅ (worker) | **Bypasses RLS.** Worker only. Never in `api`, never near a sandbox |
-| `RT_SUPABASE_JWKS_URL` | HttpUrl | ✅ (api) | RS256 public-key set. See B12 below |
+| `RT_SUPABASE_JWKS_URL` | HttpUrl | ✅ (api) | Asymmetric public-key set (ES256 in the current GoTrue build; RS256 also accepted). See B12 below |
 | `RT_SUPABASE_JWKS_CACHE_TTL_SECONDS` | int | 86400 | Refetched early on a `kid` miss |
 | `RT_STORAGE_BUCKET` | string | | Default `roottrace-artifacts` |
 
-> **B12 — `RT_SUPABASE_JWT_SECRET` is retired.** The specification previously contradicted itself: `05` §2.2 and `11` §3.1 described RS256 verified against cached JWKS, while this appendix required a symmetric HS256 shared secret. RS256 + JWKS is canonical. The shared secret is not merely redundant — it is a **signing** key, so its presence in the `api` environment would let a compromised API process mint valid tokens for any user. A public key cannot. Retiring it removes a forgery capability from the service that is most exposed to the internet.
+> **B12 — `RT_SUPABASE_JWT_SECRET` is retired.** The specification previously contradicted itself: `05` §2.2 and `11` §3.1 described RS256 verified against cached JWKS, while this appendix required a symmetric HS256 shared secret. Asymmetric verification against JWKS is canonical — the shared secret is not merely redundant, it is a **signing** key, so its presence in the `api` environment would let a compromised API process mint valid tokens for any user. A public key cannot. Retiring it removes a forgery capability from the service that is most exposed to the internet.
+>
+> **Addendum, T1.4.** The original RS256-only assumption was itself wrong: Supabase's GoTrue signs with ES256 in the deployed build, not RS256. The verifier does not hard-code either — it reads the algorithm from the matching JWKS entry and restricts the key set to asymmetric algorithms only, so the forgery property above holds regardless of which one GoTrue actually uses.
 
 ### GitHub
 
@@ -332,7 +334,7 @@ GitHub OAuth requires a registered OAuth app and a callback URL, which not every
 | `ci` | Magic link only (deterministic, no external dependency) | — | Test fixtures mint sessions directly through GoTrue |
 | `staging` / `production` | GitHub OAuth **required** | Magic link stays enabled for account recovery | Boot invariant (§6) |
 
-The critical property: **both paths issue the same RS256 JWT with the same `sub` claim**, so `auth.uid()` and every RLS policy behave identically. A developer working with magic link is exercising the real authorization path, not a bypass. There is no "dev mode" that skips auth — that would leave the auth path untested until staging.
+The critical property: **both paths issue the same GoTrue JWT with the same `sub` claim**, so `auth.uid()` and every RLS policy behave identically. A developer working with magic link is exercising the real authorization path, not a bypass. There is no "dev mode" that skips auth — that would leave the auth path untested until staging.
 
 ### 5.2 Make targets (A1) — CANONICAL
 
@@ -402,7 +404,7 @@ def boot_invariants(self):
         assert self.supabase_service_role_key is None, \
             "SECURITY: api service must not hold the service-role key"
         assert self.supabase_jwks_url is not None, \
-            "api requires JWKS for RS256 verification"
+            "api requires JWKS for asymmetric token verification"
 
     return self
 ```
