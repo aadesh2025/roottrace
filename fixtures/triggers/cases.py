@@ -333,67 +333,95 @@ def external_03() -> Reproduction:
 # ── Concurrency ────────────────────────────────────────────────────────────
 
 
+class _InterleavingStock(dict):  # type: ignore[type-arg]
+    """The stock mapping, holding each of the first `readers` readers at a
+    barrier so that all of them observe the same value before any writes back.
+
+    This instruments the **data the service was handed**, not the service. Its
+    `decrement` is untouched: it still reads, still checks, still writes, and
+    the interleaving it exhibits here is one the real scheduler is free to
+    produce at any moment. A defect that only reproduced against a modified
+    version of itself would not be a defect.
+    """
+
+    def __init__(self, mapping: dict[str, int], readers: int):
+        super().__init__(mapping)
+        self._readers = readers
+        self._barrier = threading.Barrier(readers)
+        self._paused = 0
+        self._lock = threading.Lock()
+
+    def get(self, key: str, default: int | None = None) -> int | None:  # type: ignore[override]
+        value = super().get(key, default)
+        with self._lock:
+            should_pause = self._paused < self._readers
+            if should_pause:
+                self._paused += 1
+        if should_pause:
+            # Released once every reader has arrived. Timed out rather than
+            # infinite so a future change that stops calling `get` fails
+            # loudly instead of hanging CI.
+            self._barrier.wait(timeout=30)
+        return value
+
+
 def race_01() -> Reproduction:
     """Several threads all sell the last unit.
 
-    A barrier alone does not reproduce this. `decrement` is four bytecodes
-    between the read and the write, and CPython only switches threads every
-    `sys.getswitchinterval()` seconds (5 ms by default), so the window
-    essentially never opens — which is exactly why the bug survived review and
-    why the single-threaded suite in `tests/test_inventory.py` is green.
+    **Deterministic, not probabilistic.** The first version raced the real
+    scheduler with a shortened switch interval and 500 attempts. It reproduced
+    reliably on a developer machine and never once on CI's runner — a flaky
+    test, which is a bug by our own standard, and a particularly bad one here
+    because a green run would have meant "this bug may not exist".
 
-    Shortening the switch interval opens the window without touching the code
-    under test. That distinction matters: a defect that only reproduced against
-    a modified version of itself would not be a defect. Nothing here patches
-    `InventoryService`; only the scheduler's granularity changes, and it is
-    restored afterwards.
+    Forcing the interleaving instead removes the timing entirely. Every seller
+    reads the stock, all of them wait until each has read, and only then do
+    they write. That `decrement` permits this at all is the defect: read,
+    check and write are three steps with nothing holding them together.
+
+    It is also why the bug survived review. CPython rarely switches threads
+    inside those four bytecodes, so the window almost never opens in practice
+    — and `tests/test_inventory.py` is single-threaded, so it never opens
+    there at all.
     """
     service = InventoryService(InventoryClient("http://inventory.internal"))
-    sellers = 8
+    sellers = 4
 
-    original_interval = sys.getswitchinterval()
-    sys.setswitchinterval(1e-6)
-    try:
-        for _ in range(500):
-            service.set_stock("sku-1", 1)
-            started = threading.Barrier(sellers)
-            sold: list[int] = []
-            lock = threading.Lock()
+    service.set_stock("sku-1", 1)
+    service._stock = _InterleavingStock({"sku-1": 1}, readers=sellers)
 
-            def sell(
-                barrier: threading.Barrier = started,
-                out: list[int] = sold,
-                guard: threading.Lock = lock,
-            ) -> None:
-                barrier.wait()
-                try:
-                    remaining = service.decrement("sku-1", 1)
-                except ValueError:
-                    return
-                # The harness's own bookkeeping is synchronised. The code under
-                # test is not, which is the whole point.
-                with guard:
-                    out.append(remaining)
+    sold: list[int] = []
+    bookkeeping = threading.Lock()
 
-            threads = [threading.Thread(target=sell) for _ in range(sellers)]
-            for thread in threads:
-                thread.start()
-            for thread in threads:
-                thread.join()
+    def sell() -> None:
+        try:
+            remaining = service.decrement("sku-1", 1)
+        except ValueError:
+            return
+        # The harness's own bookkeeping is synchronised. The code under test
+        # is not, which is the whole point.
+        with bookkeeping:
+            sold.append(remaining)
 
-            if len(sold) > 1:
-                return Reproduction(
-                    case_id="race-01",
-                    kind="behaviour",
-                    detail=(
-                        f"{len(sold)} concurrent checkouts each sold the last unit; "
-                        f"stock ended at {service.available('sku-1')} after starting at 1"
-                    ),
-                )
-    finally:
-        sys.setswitchinterval(original_interval)
+    threads = [threading.Thread(target=sell) for _ in range(sellers)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=60)
 
-    raise AssertionError("race-01: could not reproduce the oversell in 500 attempts")
+    if len(sold) <= 1:
+        raise AssertionError(
+            "race-01: only one seller succeeded, so read-check-write held together"
+        )
+
+    return Reproduction(
+        case_id="race-01",
+        kind="behaviour",
+        detail=(
+            f"{len(sold)} concurrent checkouts each sold the last unit of a stock of 1; "
+            f"the ledger now reads {service.available('sku-1')}"
+        ),
+    )
 
 
 def race_02() -> Reproduction:
