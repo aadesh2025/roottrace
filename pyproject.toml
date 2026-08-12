@@ -125,7 +125,12 @@ show_error_codes = true
 # Untyped third-party packages are opted in explicitly rather than blanket
 # ignored, so a missing stub is a visible decision.
 disallow_untyped_defs = true
-exclude = "^fixtures/synthetic-repo/"
+# The synthetic repo's flaws are the subject under test — type-checking it
+# would surface the very defects the pipeline is supposed to find. The trigger
+# harness is excluded for a different reason: it imports that repo through a
+# runtime `sys.path` insert, which mypy cannot follow and should not, since
+# resolving those names would drag the unchecked repo back in.
+exclude = "^fixtures/(synthetic-repo|triggers)/"
 
 # ── pytest ─────────────────────────────────────────────────────────────────
 

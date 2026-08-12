@@ -7,9 +7,20 @@ the ways that make the pipeline look better than it is (`docs/A1` §9).
 
 ```
 fixtures/
-├─ synthetic-repo/     41 files, ~2,400 lines, 49 tests (47 pass, 2 fail on purpose)
+├─ synthetic-repo/     42 files, ~1,780 lines, 52 tests (50 pass, 2 fail on purpose)
+├─ triggers/           one reproduction per case — how we know the bugs are real
 └─ error-corpus/       25 cases — one case, one file: <case_id>.case.json
 ```
+
+`triggers/` exists because of `A1` §9: *if you can't trigger it by running the
+code, it isn't a fixture — it's a fiction.* Each of the 25 cases has a trigger
+that executes the synthetic repository and reproduces its defect, so "the bug
+is present" is a thing we run rather than a thing we assert. T3.2 captures the
+error payloads from those real tracebacks instead of hand-writing them.
+
+It lives **outside** `synthetic-repo/` deliberately. A checkout API does not
+ship a directory of scripts that break it on purpose, and retrieval would learn
+to find bugs by looking for our annotations rather than by reading the code.
 
 The two deliberately failing tests are not an oversight: gate **G6** classifies
 pre-existing failures as `already_failing` so they do not count against a patch,

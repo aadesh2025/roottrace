@@ -41,20 +41,32 @@ Every design choice must satisfy these. If a choice conflicts with one, the choi
 
 ## Build order — do not skip ahead
 
+**Phases, not weeks — `15` §2 is canonical.** The binding order is:
+
 ```
-W1 foundation → W2 ingest → W3 fixtures → W4 retrieval → W5 reasoning
-→ W6 sandbox → W7 loop+score → W8 publish+viewer → W9 dashboard → W10 harden
+Phase 1 tooling → Phase 2 schema+RLS → Phase 3 auth → Phase 4 FastAPI foundation
+→ Phase 5 FIXTURES → Phase 6 ingestion → Phase 7 retrieval → Phase 8 AI reasoning
+→ Phase 9 patch generation → Phase 10 sandbox → Phase 11 repair loop
+→ Phase 12 independent review → Phase 13 confidence engine
+→ Phase 14 fixture GitHub transport → Phase 15 evaluation harness → Phase 16 dashboard
 ```
+
+**Fixtures (Phase 5) come before ingestion (Phase 6), reversed from the ticket
+numbering (`T2.*` is ingest, `T3.*` is fixtures).** Deliberate: you cannot
+validate an ingest/fingerprinting path without known-good input, and
+hand-written test payloads are subtly unrealistic in exactly the ways that
+make the pipeline look better than it is (`A1` §9). Go by the phase list
+above, never by ticket number order.
 
 Hard sequencing rules from `15` §14:
 
 - Schema and RLS before any application code. Retrofitting tenancy is a rewrite.
-- Fixtures before the pipeline. You cannot test a pipeline without known-good input.
+- Fixtures before ingestion, and before the rest of the pipeline. You cannot test either without known-good input.
 - Retrieval before reasoning. A reasoning stage fed bad context teaches you nothing.
 - Sandbox before the repair loop. The loop is driven entirely by sandbox output.
 - Scoring before publishing. Publishing is gated on the score.
 
-**The rule that matters most: do not advance past Week 4 until retrieval is genuinely good on all 25 fixtures.** Everything downstream inherits its errors, and a confident wrong answer built on wrong context passes every later gate.
+**The rule that matters most: do not advance past Phase 7 (retrieval) until it is genuinely good on the fixture set.** Everything downstream inherits its errors, and a confident wrong answer built on wrong context passes every later gate.
 
 Finish a ticket's acceptance criteria before starting the next. If you think a step should be reordered, say so and wait — don't reorder silently.
 

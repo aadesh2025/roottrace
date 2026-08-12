@@ -105,5 +105,12 @@ jobs:
       - name: make db-reset
         run: make db-reset
 
+      # `A1` §8 requires this in CI: it confirms every ground-truth reference
+      # resolves to real code, so a refactor of the fixtures cannot silently
+      # invalidate the evaluation harness. Run before the broader suite so a
+      # broken corpus is reported as a broken corpus.
+      - name: make fixtures-verify
+        run: make fixtures-verify
+
       - name: make test-integration
         run: make test-integration

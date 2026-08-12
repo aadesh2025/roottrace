@@ -143,7 +143,7 @@ Canonical values for the reference case `null-prop-01`:
 | Confidence | 0.836, band `high` |
 | Out-of-scope caller | `services/quote.py::estimate_total` |
 
-**Corpus shape:** 41 files, ~2,400 lines, 49 tests (47 passing, **2 deliberately failing** so gate G6's baseline classification is exercised).
+**Corpus shape:** 42 files, ~1,780 lines, 52 tests (50 passing, **2 deliberately failing** so gate G6's baseline classification is exercised). Built in T3.1; the earlier "41 files, ~2,400 lines, 49 tests" was an estimate written before the repository existed, and omitted `tests/test_quote.py`, which `A1` §5 requires for `regression-02`.
 
 **Controls:** `unfixable-01`, `unfixable-02` → `insufficient_context`, no patch, no PR, no fabricated root cause. Measured by M14 (2/2) and M15 (0.00), both merge-blocking.
 

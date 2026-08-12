@@ -56,10 +56,12 @@ fixtures/synthetic-repo/                    # "acme/checkout-api"
 │  ├─ settings.py
 │  └─ regions.py
 ├─ tests/
+│  ├─ conftest.py             stubbed clients; the suite never touches a network
 │  ├─ test_checkout.py        12 tests
 │  ├─ test_cart.py            9 tests
 │  ├─ test_inventory.py       8 tests
 │  ├─ test_pricing.py         11 tests
+│  ├─ test_quote.py           3 tests  ← the contract `regression-02` breaks
 │  ├─ test_webhooks.py        5 tests, 1 FAILING before any patch
 │  └─ test_export.py          4 tests, 1 FAILING before any patch
 ├─ requirements.txt
@@ -67,9 +69,15 @@ fixtures/synthetic-repo/                    # "acme/checkout-api"
 └─ .roottrace-fixture.json    simulated git metadata
 ```
 
-**41 files · ~2,400 lines · 49 tests (47 passing, 2 pre-existing failures).**
+**42 files · ~1,780 lines · 52 tests (50 passing, 2 pre-existing failures).**
+
+> **Corrected in T3.1.** This section previously listed six test files summing to exactly 49 tests, and §5 simultaneously required `tests/test_quote.py::test_estimate_with_missing_tax` for `regression-02` — a file the tree did not contain. The file is real now and the counts include it.
+>
+> The line total is ~1,780, not the ~2,400 originally estimated. Reported rather than padded: the figure that matters is whether retrieval has to cross real module boundaries under a 24,000-token budget, and 39 modules across seven layers does that. Writing filler to reach a round number would make the corpus look harder than it is.
 
 The two pre-existing failures matter: they force gate G6 to run a pre-patch baseline and classify them as `already_failing`. Without them, a repo with any broken test would fail every validation forever, and we'd never notice the bug in our own gate logic.
+
+**Both are deliberately unrelated to any of the 25 cases** (`test_export.py::test_header_includes_created_at`, `test_webhooks.py::test_event_summary_reports_livemode`). If a baseline failure were tied to a case, fixing that case would flip it to passing and corrupt G6's accounting — the suite would then be measuring our own bookkeeping rather than the patch. `tests/integration/test_fixture_repo.py` asserts both the identity of the two failures and their independence from the corpus.
 
 `services/quote.py` calls `TaxClient.get_rate` with the same missing guard as `checkout.py`. The correct behaviour is to fix the client, note that `quote.py` is affected, and **not** expand scope to fix it. This tests scope discipline directly.
 
@@ -129,8 +137,10 @@ class TaxClient:
             return Decimal(resp.json()["rate"])
         except httpx.HTTPStatusError:
             logger.warning("tax service returned an error for region=%s", region)
-            return None                    # ← line 41. Swallows 5xx, returns None.
+            return None                    # ← line 43. Swallows 5xx, returns None.
 ```
+
+> The defect occupies **lines 38–43** — the request through the swallowed return — as registered in `18` §7, which is authoritative. This snippet previously annotated the return as line 41, which contradicted that range; the code is written to the registry and `tests/integration/test_fixture_repo.py` asserts it line by line, because every document quotes these numbers and the evaluator compares the model's citation against them literally.
 
 ```python
 # services/checkout.py — WHERE IT SURFACES

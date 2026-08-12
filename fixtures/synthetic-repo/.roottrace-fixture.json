@@ -1,0 +1,81 @@
+{
+  "_comment": [
+    "Simulated git metadata for acme/checkout-api (docs/A1 §3).",
+    "The fixture GitHub client (T3.3) serves blame, compare and commit-history",
+    "requests from this file, so retrieval strategy D exercises the same code",
+    "path it will in `live` mode — only the transport differs.",
+    "Blame line ranges are inclusive and 1-based, matching `git blame`."
+  ],
+  "repository": "acme/checkout-api",
+  "default_branch": "main",
+  "head_sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b",
+  "releases": [
+    { "tag": "v2.14.1", "sha": "3c1a9d2f7e6b5a4c3d2e1f0a9b8c7d6e5f4a3b2c", "date": "2026-07-18T10:00:00Z" },
+    { "tag": "v2.14.2", "sha": "6d4b8e1f3a2c5d7e9b0a1c2d3e4f5a6b7c8d9e0f", "date": "2026-07-24T09:30:00Z" },
+    { "tag": "v2.14.3", "sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b", "date": "2026-08-01T10:00:00Z" }
+  ],
+  "commits": [
+    {
+      "sha": "3c1a9d2f7e6b5a4c3d2e1f0a9b8c7d6e5f4a3b2c",
+      "message": "chore: split _build_response out of the checkout handler",
+      "author": { "name": "Sam Okafor", "email": "sam@acme.io" },
+      "date": "2026-07-18T09:12:00Z",
+      "files": ["api/routes/checkout.py"],
+      "diff_url": "fixtures/synthetic-repo/.history/3c1a9d2.diff"
+    },
+    {
+      "sha": "6d4b8e1f3a2c5d7e9b0a1c2d3e4f5a6b7c8d9e0f",
+      "message": "feat: regional rounding rules for discounts\n\napply_discount now takes the region so ap-south rounds to whole rupees.\nCallers updated.",
+      "author": { "name": "Priya Nair", "email": "priya@acme.io" },
+      "date": "2026-07-24T09:30:00Z",
+      "files": ["services/pricing.py", "services/cart.py", "tests/test_pricing.py"],
+      "diff_url": "fixtures/synthetic-repo/.history/6d4b8e1.diff"
+    },
+    {
+      "sha": "8a3f1c2e5b4d3a2f1e0d9c8b7a6f5e4d3c2b1a09",
+      "message": "refactor: extract tax lookup into TaxClient",
+      "author": { "name": "Dana Reyes", "email": "dana@acme.io" },
+      "date": "2026-07-25T11:04:00Z",
+      "files": ["clients/tax_client.py", "services/checkout.py", "services/quote.py"],
+      "diff_url": "fixtures/synthetic-repo/.history/8a3f1c2.diff"
+    },
+    {
+      "sha": "9f2b1c4e8a7d6b5c4a3f2e1d0c9b8a7f6e5d4c3b",
+      "message": "feat: CSV export endpoint",
+      "author": { "name": "Dana Reyes", "email": "dana@acme.io" },
+      "date": "2026-08-01T10:00:00Z",
+      "files": ["api/routes/export.py", "services/export.py", "tests/test_export.py"],
+      "diff_url": "fixtures/synthetic-repo/.history/9f2b1c4.diff"
+    }
+  ],
+  "blame": {
+    "clients/tax_client.py": [
+      { "lines": [1, 35], "sha": "3c1a9d2f", "author": "sam@acme.io", "date": "2026-07-18T09:12:00Z" },
+      { "lines": [36, 43], "sha": "8a3f1c2e", "author": "dana@acme.io", "date": "2026-07-25T11:04:00Z" }
+    ],
+    "services/checkout.py": [
+      { "lines": [1, 132], "sha": "3c1a9d2f", "author": "sam@acme.io", "date": "2026-07-18T09:12:00Z" },
+      { "lines": [133, 161], "sha": "8a3f1c2e", "author": "dana@acme.io", "date": "2026-07-25T11:04:00Z" }
+    ],
+    "services/quote.py": [
+      { "lines": [1, 38], "sha": "8a3f1c2e", "author": "dana@acme.io", "date": "2026-07-25T11:04:00Z" }
+    ],
+    "services/pricing.py": [
+      { "lines": [1, 89], "sha": "6d4b8e1f", "author": "priya@acme.io", "date": "2026-07-24T09:30:00Z" }
+    ],
+    "services/cart.py": [
+      { "lines": [1, 77], "sha": "6d4b8e1f", "author": "priya@acme.io", "date": "2026-07-24T09:30:00Z" }
+    ],
+    "services/export.py": [
+      { "lines": [1, 75], "sha": "9f2b1c4e", "author": "dana@acme.io", "date": "2026-08-01T10:00:00Z" }
+    ],
+    "api/routes/checkout.py": [
+      { "lines": [1, 74], "sha": "3c1a9d2f", "author": "sam@acme.io", "date": "2026-07-18T09:12:00Z" }
+    ]
+  },
+  "path_mappings": [
+    { "from": "/app/", "to": "" }
+  ],
+  "root_path": "",
+  "service_map": { "checkout-api": "" }
+}

@@ -39,7 +39,7 @@ Live GitHub repos · repo indexing / embeddings (schema exists, unpopulated) · 
 
 ## 2. Implementation order — CANONICAL
 
-**Phases, not weeks.** A phase completes when its acceptance criteria pass, not when a calendar week ends. The weeks below are estimates; the *order* is binding. Registered in `18` §8.
+**Phases, not weeks.** A phase completes when its acceptance criteria pass, not when a calendar week ends. The weeks below are estimates; the *order* is binding.
 
 ```
 PHASE 0   Specification repair        ← COMPLETE (see `18` §9)
@@ -216,6 +216,19 @@ Severity scoring, investigation gating, cooldown, quota check.
 ~40 files. Realistic layered Python service: `api/routes`, `services`, `clients`, `models`, `tests`. Real dependencies in `requirements.txt`. An existing, deliberately imperfect test suite. Simulated git history in `.roottrace-fixture.json` with blame data, commits, and release tags — including the specific commits that introduce the fixture bugs.
 
 **Accept:** The repo installs and its test suite runs green inside the sandbox image. Every one of the 25 bugs is genuinely present in the code.
+
+**Done.** Verified by `tests/integration/test_fixture_repo.py` (63 tests) and `make fixtures-verify`, which runs in CI so a refactor of the fixtures cannot silently invalidate the evaluation harness.
+
+Four contradictions in the spec had to be resolved to build it:
+
+- **`A1` §5 required `tests/test_quote.py::test_estimate_with_missing_tax`** for `regression-02`, but §2's tree had no such file — and its six test files summed to exactly the stated 49 tests, so the file had been dropped rather than the count. Added; `A1` §2 and `18` §7 corrected to 42 files, 52 tests, 50 passing.
+- **"Runs green" vs "two tests fail before any patch."** Both are true only under one reading: the suite runs to completion at a *known baseline*. Asserting zero failures would delete the two that exist to exercise G6's `already_failing` branch; asserting "two failed" would accept any two. The test names both and asserts they are unrelated to any case, because a baseline failure tied to a case would flip to passing when that case is fixed and corrupt G6's accounting.
+- **"Inside the sandbox image"** — that image is T6.1, eight phases away. Checked against the same pinned `python:3.12-slim` base with **`--network none`**, which is the property T6.1 would otherwise inherit as a surprise: a fixture suite that quietly needed the internet would pass locally and fail in the sandbox for reasons that look like a patch defect. Re-verify against the hardened image at T6.1.
+- **`18` §7 pins the canonical defect to lines 38–43; `A1` §4's inline comment said line 41.** The registry wins. The code is written to it and the line numbers are asserted individually, since every document quotes them and the evaluator compares the model's citation literally.
+
+The line total is **~1,780, not the ~2,400 estimated**. Reported rather than padded — 39 modules across seven layers is what makes retrieval cross real boundaries, and filler would make the corpus look harder than it is.
+
+**`fixtures/triggers/` is the mechanism for the second criterion.** `A1` §9 says a bug you cannot trigger by running the code is a fiction, so each case has a reproduction that executes the repository. Two of them found real defects in the corpus while being written: `boundary-01` was not a bug at all (with 1-based pagination, `offset - 1` is correct), and both controls were leaking raw transport exceptions — meaning the handling was *not* already correct and they would have been fixable cases rather than controls. `race-01` needed `sys.setswitchinterval` to open the window, which is also why it survived review in the story and why the single-threaded suite is green. T3.2 captures its payloads from these tracebacks rather than hand-writing them.
 
 ### T3.2 Error corpus
 

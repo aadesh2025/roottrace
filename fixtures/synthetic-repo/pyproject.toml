@@ -1,0 +1,28 @@
+# acme/checkout-api — the synthetic repository (docs/A1).
+#
+# THIS IS NOT PART OF THE ROOTTRACE WORKSPACE. It is deliberately excluded from
+# the uv workspace members, from ruff, and from mypy: its flaws are the subject
+# under test. Linting it would remove the bugs, and formatting it would move the
+# very line numbers the 25 ground-truth cases cite.
+#
+# It is a plausible mid-sized service written by a competent team under time
+# pressure. That is the point — a toy repo would let the pipeline pass tests a
+# real repository would fail (A1 §1).
+
+[project]
+name = "checkout-api"
+version = "2.14.3"
+description = "acme checkout service"
+requires-python = ">=3.12"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["api", "api.routes", "api.middleware", "services", "clients", "models", "config"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# No addopts. The suite is run by the harness with explicit flags, and a
+# repository-level `-q` would hide the two expected failures we assert on.

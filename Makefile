@@ -175,8 +175,15 @@ fixture-run: ## Run one fixture case end to end — make fixture-run CASE=null-p
 	@exit 1
 
 fixtures-verify: ## Assert every ground-truth path/symbol/line resolves to real code
-	@echo "fixtures-verify: enabled by T3.2 (docs/15 §5)."
-	@exit 1
+	@# Runs in CI (docs/A1 §8), so a refactor of the fixtures cannot silently
+	@# invalidate the evaluation harness.
+	@#
+	@# From T3.1 this covers the synthetic repository: the suite's 50/2
+	@# baseline, the canonical line numbers `18` §7 pins, the blame ranges, and
+	@# — the criterion that matters — every one of the 25 bugs REPRODUCED by
+	@# running the code rather than asserted from a manifest (A1 §9).
+	@# T3.2 extends it to the ground-truth files of the error corpus.
+	$(UV) run pytest tests/integration/test_fixture_repo.py -q
 
 # ── Evaluation ─────────────────────────────────────────────────────────────
 

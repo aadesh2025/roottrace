@@ -1,0 +1,9 @@
+# Real third-party dependencies, so dependency resolution and import checks are
+# genuinely exercised (A1 §1). Pinned, as a service of this age would be.
+fastapi==0.111.0
+httpx==0.27.0
+pydantic==2.7.1
+python-dateutil==2.9.0.post0
+
+# Test-only
+pytest==8.2.0
