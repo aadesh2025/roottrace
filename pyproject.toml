@@ -147,7 +147,22 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-source = ["apps", "packages"]
+# The PACKAGE directories, not `apps` and `packages`.
+#
+# Coverage discovers never-imported files by walking each source directory, but
+# it only recurses into a subdirectory that contains `__init__.py`. `apps/` does
+# not, so nothing under it was ever discovered: the report contained exactly the
+# modules some test happened to import, and a module with no tests at all was
+# absent rather than 0%. The overall floor could then be satisfied by not
+# importing something. Caught when `roottrace_api/serve.py` failed to appear.
+#
+# Add a line here for each new workspace package.
+source = [
+  "apps/api/roottrace_api",
+  "apps/worker/roottrace_worker",
+  "apps/sandbox-runner/roottrace_sandbox_runner",
+  "packages/sdk-python/roottrace_sdk",
+]
 # `tests` is deliberately absent from source: test code is not the thing being
 # measured.
 # __init__.py is deliberately NOT omitted. It is the usual thing to exclude,

@@ -107,6 +107,7 @@ Format: `RT-<DOMAIN>-<NNNN>`
 | Code | HTTP | Meaning |
 |---|---|---|
 | `RT-VALIDATION-0001` | 422 | Request schema validation failed |
+| `RT-VALIDATION-0002` | 405 | HTTP method not allowed for this path |
 | `RT-RATE-0001` | 429 | Rate limit exceeded |
 | `RT-RATE-0002` | 429 | Concurrent WebSocket limit reached |
 | `RT-QUOTA-0001` | 402 | Project quota exhausted |

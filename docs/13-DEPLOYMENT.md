@@ -99,16 +99,21 @@ At $99/project/month this is comfortably profitable at 20 paying projects. The d
 
 ## 3. Container images
 
+Built as written in **`infra/docker/api.Dockerfile`**, which is authoritative; the sketch below is the shape. Build context is the repository root, since the lockfile and the workspace root `pyproject.toml` live above the Dockerfile.
+
 ```dockerfile
-# apps/api/Dockerfile — multi-stage, non-root, minimal
-FROM python:3.12-slim-bookworm@sha256:<pinned> AS builder
+# infra/docker/api.Dockerfile — multi-stage, non-root, minimal
+FROM python@sha256:<pinned> AS builder
 WORKDIR /build
-RUN pip install --no-cache-dir uv
+COPY --from=ghcr.io/astral-sh/uv:<pinned> /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
-RUN uv export --frozen --no-dev > requirements.txt \
+COPY apps/*/pyproject.toml packages/*/pyproject.toml ./…/
+RUN uv export --frozen --no-dev --package roottrace-api \
+      --no-emit-workspace --no-hashes > requirements.txt \
+ && grep -q '^fastapi==' requirements.txt \
  && uv pip install --system --no-cache -r requirements.txt
 
-FROM python:3.12-slim-bookworm@sha256:<pinned>
+FROM python@sha256:<pinned>
 RUN groupadd -r app && useradd -r -g app -u 10001 app
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
@@ -116,14 +121,21 @@ WORKDIR /app
 COPY --chown=app:app apps/api ./
 USER app
 EXPOSE 8000
+RUN uvicorn --version && python -c "import roottrace_api.serve"
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \
   CMD python -c "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8000/health').status_code==200 else 1)"
-CMD ["uvicorn","roottrace_api.main:app","--host","0.0.0.0","--port","8000","--workers","2"]
+CMD ["python", "-m", "roottrace_api.serve"]
 ```
+
+Three corrections from T1.5, each of which produced a working-looking image that was not:
+
+- **`--package roottrace-api` is required.** The workspace root's `dependencies` list is empty — every member is wired in through the `dev` group — so `uv export --no-dev` on the root exported *nothing*, `uv pip install -r` on an empty file succeeded, and the image built cleanly and died at startup with `uvicorn: not found`. The `grep -q '^fastapi=='` and the import smoke test below it are what turn that into a build failure.
+- **The entrypoint is `python -m roottrace_api.serve`, not `uvicorn …` directly.** uvicorn emits its first log lines before it builds the app, so with the plain command those lines escape the structlog chain and arrive as unparseable plain text at every boot. `serve.py` validates settings, installs the chain, and only then starts the server — which also means the boot invariants run before the port opens.
+- **The Dockerfile lives in `infra/docker/`**, matching §4's tree. §3 previously said `apps/api/Dockerfile`.
 
 Rules for every image:
 
-- Base images pinned by **digest**, not tag. A tag can be re-pointed; a digest cannot.
+- Base images pinned by **digest**, not tag. A tag can be re-pointed; a digest cannot. This includes the `uv` installer image: an unpinned installer defeats the point of a locked dependency set, since it is the thing resolving it.
 - Multi-stage builds — no build toolchain in the runtime layer.
 - Non-root user, fixed UID.
 - No secrets in any layer; verified by `docker history` inspection in CI.

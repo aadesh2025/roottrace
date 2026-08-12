@@ -74,11 +74,11 @@ def api() -> TestClient:
         os.environ[key] = value
 
     from roottrace_api.auth import dependencies
-    from roottrace_api.main import app
+    from roottrace_api.main import create_app
 
     dependencies.get_settings.cache_clear()
     dependencies.get_jwks.cache_clear()
-    return TestClient(app)
+    return TestClient(create_app())
 
 
 @pytest.fixture

@@ -433,6 +433,10 @@ Coverage is configured from day one and **enforced in stages**, because a hard 8
 
 The ratchet is **monotonic**: `RT_COVERAGE_MIN_OVERALL` may only ever be raised. Lowering it requires an explicit commit that says why, and CI flags any decrease. Per-area floors from `14` §10 (pipeline ≥90%, fingerprint/retrieval/scoring ≥95%, auth/RLS ≥95%) apply from the phase that introduces each area.
 
+**`[tool.coverage.run] source` must name the package directories, not `apps` and `packages`.** Coverage discovers never-imported files by walking each source directory, but recurses into a subdirectory only when it contains `__init__.py` — and `apps/` does not. With the parent directories named, the report contained exactly the modules some test happened to import: a module with no tests at all was *absent* rather than 0%, and either floor could be satisfied by not importing something. Both numbers below Phase 4 were measured under that bug and are lower than they looked.
+
+**The security floor must also name what it measures.** It is scoped to `apps/api/roottrace_api/auth` (plus the worker's tenancy module when that exists), not the whole `api` package: a 95% floor spread across unrelated modules is not this control, and would fail for reasons that have nothing to do with auth. It is measured over `-m "security or unit"`, since the auth unit tests carry the `unit` marker and the security suite alone reports a number far below the truth.
+
 ---
 
 *Next: [`A4-ADR-LOG.md`](./A4-ADR-LOG.md)*

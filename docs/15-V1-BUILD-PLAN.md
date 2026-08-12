@@ -160,6 +160,19 @@ FastAPI app, typed settings, structured logging with redaction, `request_id` mid
 
 **Accept:** Container builds and runs as non-root. Health checks respond. A deliberate exception produces the standard error envelope with `request_id`, and the log line contains no secrets.
 
+**Done.** All criteria pass, re-proved on every commit by `tests/integration/test_container.py` (the image is built by the suite, not assumed present) and the unit suites for the envelope and redaction. The coverage ratchet moves to **60** here, per `A3` §6.1.
+
+Six defects found and fixed while building it, five of them controls that looked applied and were not:
+
+- **The catch-all handler was outside its own middleware.** FastAPI routes a registered `Exception` handler to Starlette's `ServerErrorMiddleware`, which wraps every user middleware — so a 500 arrived with no `X-Request-ID`, no security headers, and a null `request_id` in its own envelope, because the contextvar had already been reset. The catch-all now lives in `RequestContextMiddleware`.
+- **405 escaped the envelope entirely**, since no registered code mapped to it. `RT-VALIDATION-0002` added to `17` §4 rather than reusing an unrelated code.
+- **The container image had no dependencies.** `uv export --no-dev` against the workspace root exports nothing (every member is in the `dev` group), the install of an empty requirements file succeeded, and the image built green and died at startup. See `13` §3.
+- **The container's boot log lines were plain text.** uvicorn logs before it builds the app, so with `uvicorn --factory` as the entrypoint those lines escaped the processor chain. `serve.py` is the entrypoint now.
+- **`--no-access-log` was being undone by our own `configure_logging`**, which re-enabled propagation on the logger uvicorn had just switched off — a duplicate, unredacted access line per request.
+- **Coverage measured only imported modules.** `source = ["apps", "packages"]` looked right, but coverage recurses into a source directory only when it contains `__init__.py`, and `apps/` does not — so a module with no tests at all was absent from the report rather than 0%, and the overall floor could be satisfied by not importing something. Caught because `serve.py` failed to appear. Fixed to name the package directories.
+
+**Deferred deliberately:** CORS (SC63). It needs a dashboard origin that does not exist until T8.2 and a new `RT_*` variable to hold it. With no CORS middleware the browser default is that no cross-origin page can read a response, which is the safe direction to be wrong in; a permissive placeholder is not.
+
 ---
 
 ## 4. Week 2 — Ingest

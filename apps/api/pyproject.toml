@@ -11,6 +11,9 @@ dependencies = [
   # has a CVE history. `crypto` pulls in `cryptography` for RS256/ES256 (B12).
   "pyjwt[crypto]>=2.10,<3.0",
   "httpx>=0.28,<1.0",
+  # docs/12 §1 names structlog specifically. Redaction is a processor in its
+  # chain (docs/11 §8.3), which is what makes it unbypassable.
+  "structlog>=25.4,<26.0",
 ]
 
 [build-system]

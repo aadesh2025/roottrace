@@ -261,16 +261,31 @@ REDACT_KEYS = re.compile(
     r"(api[_-]?key|token|secret|password|authorization|cookie|private[_-]?key|dsn"
     r"|access[_-]?key|refresh[_-]?token|client[_-]?secret)", re.I)
 
-def redact(record: dict) -> dict:
-    return {
-        k: ("[REDACTED]" if REDACT_KEYS.search(k) else
-            redact(v) if isinstance(v, dict) else
-            redact_patterns(v) if isinstance(v, str) else v)
-        for k, v in record.items()
-    }
+def redact(value, key=None):
+    if key is not None and REDACT_KEYS.search(key):
+        return "[REDACTED]"
+    if isinstance(value, str):
+        return redact_patterns(value)
+    if isinstance(value, Mapping):
+        return {k: redact(v, key=str(k)) for k, v in value.items()}
+    if is_sequence_but_not_str(value):
+        items = list(value)
+        # A (name, value) pair — how ASGI carries headers.
+        if len(items) == 2 and isinstance(items[0], str) and REDACT_KEYS.search(items[0]):
+            return [items[0], "[REDACTED]"]
+        return [redact(item) for item in items]
+    return value
 ```
 
-Applied as a processor in the structlog pipeline, so it cannot be bypassed by a developer writing a convenient `logger.info(config)`.
+Applied as a processor in the structlog pipeline, so it cannot be bypassed by a developer writing a convenient `logger.info(config)`. Implemented in `apps/api/roottrace_api/log.py`, which is authoritative.
+
+**Sequences are walked, and this is not cosmetic.** The earlier version of this function recursed into dictionaries and strings only, so a secret inside a list — `{"providers": [{"token": "…"}]}`, or a request's header pairs — passed through untouched. A redactor that is present and does nothing is worse than none, because it is trusted. Header pairs are additionally treated as key/value, since in a list of pairs the field name is a *value* and the key rule would never see it.
+
+**Redaction runs last in the chain**, after `format_exc_info`, so a credential inside a rendered traceback is covered too — the most ordinary way a connection string reaches a log.
+
+The value patterns here are deliberately narrower than the ingest-time sanitiser in §8.2: that one runs over customer payloads and can afford Shannon entropy, email and Luhn detection, while this one runs over our own log lines, where a false positive silently destroys the evidence an operator is reading. Every pattern here matches a credential *format*, not a credential-shaped string.
+
+Standard library logging is routed through the same chain, so a line from uvicorn, httpx or any other dependency is redacted identically. A filter covering only our own logger would miss the likeliest leak of all: a connection string in somebody else's error message.
 
 ### 8.4 Encryption
 
@@ -329,6 +344,10 @@ Cross-Origin-Opener-Policy: same-origin
 ```
 
 `'wasm-unsafe-eval'` is required by Monaco's WASM tokeniser. It is the only CSP relaxation, and it is scoped to `script-src` on routes that load the editor.
+
+**The CSP above is the dashboard's.** The API returns JSON and needs none of those sources, so it sends `default-src 'none'; frame-ancestors 'none'; base-uri 'none'` instead. Copying the dashboard's policy across would grant that surface permissions it never uses. Every other header is identical on both, except HSTS, which the API sends only when `RT_ENVIRONMENT` is `staging` or `production` — a browser that saw it from a local plain-HTTP deployment would pin `localhost` to HTTPS and refuse to load anything else served from it.
+
+**`X-Request-ID` is generated at the edge and an inbound value is never adopted.** It is attacker-controlled text arriving on the public internet, landing in the field that log correlation, every error body, and the queued job metadata (`12` §2.1) are keyed on. A caller who could choose it could forge collisions with another tenant's requests or inject control characters into log lines. Upstream correlation, when something needs it, will record the client's value under a separate field rather than trusting one.
 
 ---
 
@@ -482,7 +501,7 @@ Every security claim in this document set, with **how it is enforced** and **whi
 
 | # | Control | Enforced by | Test |
 |---|---|---|---|
-| SC25 | Secrets never in logs | structlog redaction processor (§8.3) | `test_secret_redacted_in_every_log_path` |
+| SC25 | Secrets never in logs | structlog redaction processor (§8.3), applied to stdlib logging too | `test_a_secret_never_reaches_the_output_by_value[kind]`, `…_named_field…[key]`, `…_third_party_library…`, `…_exception_traceback…` |
 | SC26 | Secrets never in prompts | Gateway pre-prompt scanner; match aborts the call | `test_prompt_with_secret_aborts` |
 | SC27 | Secrets never in a sandbox | Env built from a 10-var allowlist (L7) | `test_sandbox_env_has_no_credentials` (regex `KEY|TOKEN|SECRET|PASSWORD|DSN|URL`) |
 | SC28 | Secrets never in an image layer | Multi-stage build | `docker history` inspection in CI |
@@ -536,8 +555,11 @@ Every security claim in this document set, with **how it is enforced** and **whi
 | SC60 | Sandbox output capped and sanitised | 512 KB stdout, control bytes stripped | `test_transcript_truncated_and_sanitised` |
 | SC61 | No user-supplied URL is fetched (SSRF) | GitHub is the only outbound host, hardcoded | `test_no_dynamic_outbound_host` |
 | SC62 | CSRF on state-changing requests | `SameSite=Lax` + double-submit token | `test_csrf_token_required` |
-| SC63 | CORS restricted to the dashboard origin | Explicit allowlist, no wildcard | `test_cors_rejects_foreign_origin` |
-| SC64 | Security headers present | Middleware | `test_security_headers[header]` |
+| SC63 | CORS restricted to the dashboard origin | Explicit allowlist, no wildcard. **Deferred to T8.2** — no CORS middleware is installed, so the browser default (no cross-origin read) applies until the dashboard origin exists | `test_cors_rejects_foreign_origin` |
+| SC64 | Security headers present | `SecurityHeadersMiddleware`, outermost so error responses carry them too | `test_security_headers[header]`, `test_security_headers_are_present_on_error_responses` |
+| SC64a | `request_id` is never caller-supplied (§9) | Minted at the edge; inbound `X-Request-ID` ignored | `test_an_inbound_request_id_header_is_ignored` |
+| SC64b | A 500 never echoes the exception | Envelope built from a fixed message; traceback goes to the log only | `test_the_500_body_does_not_echo_the_exception` |
+| SC64c | No unregistered error code can be emitted | Lookup against the `17` §4 registry; unknown code raises | `test_an_unregistered_code_cannot_be_emitted`, `test_error_code_registry_matches_docs` |
 
 ### 13.7 Retention and auditability
 
@@ -549,7 +571,7 @@ Every security claim in this document set, with **how it is enforced** and **whi
 | SC68 | Replay availability is honest (C9) | `replay_available_until` computed from retention | `test_replay_after_source_expiry_404` |
 | SC69 | Deletion cascades fully | FK cascade + storage sweep | `test_project_delete_removes_all_children` |
 
-**71 controls, every one with a named enforcement mechanism and a named test.** Controls SC9–SC24 (tenant isolation) and SC41 (injection corpus) are release blockers: any failure stops the deploy.
+**74 controls, every one with a named enforcement mechanism and a named test.** Controls SC9–SC24 (tenant isolation) and SC41 (injection corpus) are release blockers: any failure stops the deploy.
 
 ---
 

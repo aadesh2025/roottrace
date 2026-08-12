@@ -13,6 +13,7 @@
 | Casing | `snake_case` in all JSON, both directions |
 | Timestamps | ISO-8601 UTC with milliseconds: `2026-08-04T09:14:22.481Z` |
 | IDs | UUIDv7, prefixed on the wire: `inv_`, `iss_`, `prj_`, `evt_`, `key_`, `repo_` |
+| `request_id` | `req_` + the UUIDv7 as 32 hex characters, no hyphens — one token, so it survives a copy-paste out of a support ticket and a grep out of a log line. The `req_01J2K3M4N5` forms below are abbreviated for readability, not literal. **Generated at the edge; an inbound `X-Request-ID` is ignored, never adopted** (`11` §9) |
 | Money | Integer micro-USD. Never floats |
 | Pagination | Cursor-based. Never offset — offset pagination breaks under concurrent inserts |
 | Versioning | Path-based `/v1`. Breaking changes create `/v2`; `/v1` is supported for ≥12 months after |
@@ -584,6 +585,7 @@ Bearer-authenticated generic error sink for teams without an SDK, with a per-pro
 | `RT-AUTH-0001…0005` | 401/403 | Authentication and authorisation (§2.3) |
 | `RT-AUTH-0020` | 401 | Webhook signature invalid |
 | `RT-VALIDATION-0001` | 422 | Request schema validation failed |
+| `RT-VALIDATION-0002` | 405 | HTTP method not allowed for this path |
 | `RT-INGEST-0003` | 400 | Batch size exceeded |
 | `RT-INGEST-0004` | 413 | Payload too large |
 | `RT-INGEST-0010` | 422 | All events in batch invalid |

@@ -22,10 +22,11 @@ SUPABASE ?= ./node_modules/.bin/supabase
 GITLEAKS_IMAGE ?= zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
 
 # The coverage ratchet (docs/A3 §6.1). MONOTONIC: this may only ever be raised.
-# Lowering it requires a commit that says why. Phase 1 measures without
-# enforcing; Phase 4 raises it to 60, Phase 6 to 75, Phase 10 to 80, Phase 15
-# to 85. Security-critical areas are gated separately from Phase 2 at 95.
-RT_COVERAGE_MIN_OVERALL ?= 0
+# Lowering it requires a commit that says why. Phase 1 measured without
+# enforcing; Phase 4 (T1.5) raises it to 60, Phase 6 to 75, Phase 10 to 80,
+# Phase 15 to 85. Security-critical areas are gated separately from Phase 2 at
+# 95.
+RT_COVERAGE_MIN_OVERALL ?= 60
 
 # The security-critical floor from docs/A3 §6.1, enforced from Phase 2. Applies
 # to auth, RLS and tenancy code. Also monotonic.

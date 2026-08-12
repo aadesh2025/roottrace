@@ -26,8 +26,8 @@ concurrency:
 
 env:
   # The coverage ratchet (docs/A3 §6.1). Raise here and in the Makefile
-  # together, and only ever upward.
-  RT_COVERAGE_MIN_OVERALL: '0'
+  # together, and only ever upward. 60 from Phase 4 (T1.5).
+  RT_COVERAGE_MIN_OVERALL: '60'
 
 jobs:
   check:
