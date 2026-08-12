@@ -174,7 +174,7 @@ omit = ["**/tests/**"]
 show_missing = true
 skip_covered = true
 # Phase 1 measures without enforcing (docs/A3 §6.1). The floor is supplied on
-# the command line by the Makefile via RT_COVERAGE_MIN_OVERALL, which is the
+# the command line by the Makefile via ROOTTRACE_COVERAGE_MIN_OVERALL, which is the
 # ratchet: it may only ever be raised. Never set a floor here — a second source
 # of truth is how a ratchet silently slips.
 fail_under = 0

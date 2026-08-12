@@ -431,7 +431,9 @@ Coverage is configured from day one and **enforced in stages**, because a hard 8
 | Phase 10 (sandbox) | **≥ 80%** | ≥ 95% | |
 | Phase 15 (eval harness) | **≥ 85%** | ≥ 95% | Final targets from `14` §10 |
 
-The ratchet is **monotonic**: `RT_COVERAGE_MIN_OVERALL` may only ever be raised. Lowering it requires an explicit commit that says why, and CI flags any decrease. Per-area floors from `14` §10 (pipeline ≥90%, fingerprint/retrieval/scoring ≥95%, auth/RLS ≥95%) apply from the phase that introduces each area.
+**The ratchet variables are not `RT_`-prefixed, deliberately.** That namespace belongs to the `Settings` model, and the unrecognised-`RT_*` boot invariant (§6) rejects anything in it without a matching field — correctly, since it cannot tell a build-tooling variable from an application setting someone retired last year. `ROOTTRACE_COVERAGE_MIN_OVERALL` and `ROOTTRACE_COVERAGE_MIN_SECURITY` therefore sit outside it, as does `ROOTTRACE_TEST_ADMIN_KEY`. The same rule applies to any future variable that belongs to the harness rather than to a running service.
+
+The ratchet is **monotonic**: `ROOTTRACE_COVERAGE_MIN_OVERALL` may only ever be raised. Lowering it requires an explicit commit that says why, and CI flags any decrease. Per-area floors from `14` §10 (pipeline ≥90%, fingerprint/retrieval/scoring ≥95%, auth/RLS ≥95%) apply from the phase that introduces each area.
 
 **`[tool.coverage.run] source` must name the package directories, not `apps` and `packages`.** Coverage discovers never-imported files by walking each source directory, but recurses into a subdirectory only when it contains `__init__.py` — and `apps/` does not. With the parent directories named, the report contained exactly the modules some test happened to import: a module with no tests at all was *absent* rather than 0%, and either floor could be satisfied by not importing something. Both numbers below Phase 4 were measured under that bug and are lower than they looked.
 

@@ -7,6 +7,8 @@ every case here is a failure we want.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -94,6 +96,35 @@ def test_unknown_variable_fails_boot(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ValidationError, match="typo_in_deploy_manifest"):
         Settings()  # type: ignore[call-arg]
+
+
+def test_no_tooling_variable_squats_the_rt_namespace() -> None:
+    """The build tooling must not define an `RT_*` variable that is not a field.
+
+    CI sets its variables as a job-level `env:`, which exports them into every
+    process the job runs — so `RT_COVERAGE_MIN_OVERALL` reached `Settings()`
+    and the unrecognised-RT_* invariant refused to boot, correctly, in every
+    test that builds settings from the environment.
+
+    That failed **only in CI**: `make` passes its own variables as make
+    variables, not environment ones, so the identical target was green locally.
+    This scans the two files that can export into a test process, which is what
+    turns the same mistake into a local failure.
+    """
+    repo_root = Path(__file__).resolve().parents[3]
+    fields = {f"RT_{name.upper()}" for name in Settings.model_fields}
+
+    squatters: dict[str, set[str]] = {}
+    for relative in ("Makefile", ".github/workflows/ci.yml"):
+        text = (repo_root / relative).read_text(encoding="utf-8")
+        found = {name for name in re.findall(r"\bRT_[A-Z0-9_]+", text) if name not in fields}
+        if found:
+            squatters[relative] = found
+
+    assert not squatters, (
+        f"tooling variables in the RT_ namespace: {squatters} — that prefix belongs to "
+        "Settings, and an unrecognised one refuses the boot (docs/A3 §6.1)"
+    )
 
 
 def test_evaluation_tier_refuses_live_github() -> None:

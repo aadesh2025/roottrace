@@ -26,11 +26,18 @@ GITLEAKS_IMAGE ?= zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9
 # enforcing; Phase 4 (T1.5) raises it to 60, Phase 6 to 75, Phase 10 to 80,
 # Phase 15 to 85. Security-critical areas are gated separately from Phase 2 at
 # 95.
-RT_COVERAGE_MIN_OVERALL ?= 60
+#
+# Renamed out of the `RT_` prefix, for the reason given below the next block.
+# CI sets this as a job-level `env:`, which exports it into every process, and
+# the unrecognised-RT_* boot invariant then refused to start the app in every
+# test that constructs Settings from the environment. It failed only in CI,
+# because `make` passes its own variables as make variables, not environment
+# ones.
+ROOTTRACE_COVERAGE_MIN_OVERALL ?= 60
 
 # The security-critical floor from docs/A3 §6.1, enforced from Phase 2. Applies
 # to auth, RLS and tenancy code. Also monotonic.
-RT_COVERAGE_MIN_SECURITY ?= 95
+ROOTTRACE_COVERAGE_MIN_SECURITY ?= 95
 
 # The Supabase admin key, read out of the running stack at call time and passed
 # to the integration suite. It is deliberately not a literal anywhere in the
@@ -98,7 +105,7 @@ typecheck: ## mypy --strict · tsc --noEmit
 test-unit: ## pytest -m unit (+ vitest from Phase 16)
 	$(UV) run pytest -m unit \
 	  --cov --cov-report=term-missing \
-	  --cov-fail-under=$(RT_COVERAGE_MIN_OVERALL)
+	  --cov-fail-under=$(ROOTTRACE_COVERAGE_MIN_OVERALL)
 
 test-integration: ## pytest -m integration (against the local Supabase stack)
 	@# Runs against the Supabase-managed Postgres, not a bare testcontainer: the
@@ -137,7 +144,7 @@ test-security: ## pytest -m security — RLS, sandbox isolation, injection corpu
 	@if ls apps/api/roottrace_api/auth/*.py >/dev/null 2>&1; then \
 	  ROOTTRACE_TEST_ADMIN_KEY="$$($(SUPABASE_SECRET_CMD))" $(UV) run pytest -m "security or unit" \
 	    --cov=apps/api/roottrace_api/auth \
-	    --cov-fail-under=$(RT_COVERAGE_MIN_SECURITY); \
+	    --cov-fail-under=$(ROOTTRACE_COVERAGE_MIN_SECURITY); \
 	else \
 	  echo "security coverage gate: no Python auth modules yet — enabled by T1.4."; \
 	fi
