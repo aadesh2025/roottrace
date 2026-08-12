@@ -56,7 +56,7 @@ dev = [
   # Integration tests talk to the Supabase-managed Postgres directly: the schema
   # depends on Supabase roles and the auth schema, which a bare testcontainer
   # does not have (deviation from `14` §4, noted there).
-  "psycopg[binary]>=3.2,<4.0",
+  "psycopg[binary]>=3.3.4,<4.0",
   "httpx>=0.28",
 ]
 
