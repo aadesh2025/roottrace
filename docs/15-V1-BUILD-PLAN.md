@@ -240,6 +240,20 @@ Severity scoring, investigation gating, cooldown, quota check.
 
 **Accept:** Score matches hand-computed values at every band boundary. Each of the six gate reasons is individually reachable and correctly reported.
 
+**Done.** 34 tests.
+
+**The arithmetic is computed by hand in the tests**, not by calling the implementation and asserting it equals itself. Every weight at full sums to exactly 1.0 — which is what makes the score a fraction rather than an arbitrary number, and the bands comparable across projects — and `03` §S3's own worked example (0.24 / 0.18 / 0.20 / 0.15 / 0.02 → 0.79) is reproduced by working backwards to the inputs that produce it.
+
+**Every band boundary is asserted at its exact value and one ten-thousandth below.** An off-by-one comparison passes a sampled test and fails here.
+
+**All six gate reasons are reached one at a time**, each by changing exactly one input from a baseline that would otherwise investigate — with a positive control that the baseline *does* investigate, since a gate that always refused would satisfy every "is gated" assertion on its own. A test also pins the enum to exactly six members, so a seventh reason cannot appear untested.
+
+Two orderings are deliberate and asserted: `already_investigating` is reported before anything else (it is the outcome B8 makes indistinguishable from being gated), and `muted` before `below_min_severity` — a user set the mute deliberately and that is the reason they would look for, not a threshold they never touched.
+
+`endpoint_criticality` resolves the **longest** matching glob, so a broad pattern added later cannot quietly downgrade a specific one already there.
+
+**Not yet wired to the database.** The B8 insert-and-handle-conflict path needs the `investigations` table and the partial unique index, which belong to the orchestrator (T8.2). `evaluate_gate` takes `has_active_investigation` as an input for exactly that reason: the gate is advisory, and the caller supplies what the database told it.
+
 ### T2.5 Python SDK
 
 `init`, `capture_exception`, `add_breadcrumb`, FastAPI middleware, batching, retry, local buffer, never-raises guarantee.
