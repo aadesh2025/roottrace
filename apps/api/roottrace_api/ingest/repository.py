@@ -29,14 +29,15 @@ if TYPE_CHECKING:  # pragma: no cover — import-time only
 _INSERT = """
 insert into raw_events
     (project_id, api_key_id, batch_id, event_ts, environment,
-     service, release, payload, payload_bytes)
+     service, release, payload, payload_bytes, redactions)
 select %s, %s, %s,
        unnest(%s::timestamptz[]),
        unnest(%s::environment_kind[]),
        unnest(%s::text[]),
        unnest(%s::text[]),
        unnest(%s::jsonb[]),
-       unnest(%s::integer[])
+       unnest(%s::integer[]),
+       unnest(%s::jsonb[])
 """
 
 
@@ -80,6 +81,7 @@ async def insert_events(
     api_key_id: str,
     batch_id: uuid.UUID,
     events: list[ValidatedEvent],
+    redactions: list[list[dict[str, str]]] | None = None,
 ) -> int:
     """Insert every accepted event. Returns the number written."""
     if not events:
@@ -98,6 +100,10 @@ async def insert_events(
                 [event.release for event in events],
                 [json.dumps(event.payload, separators=(",", ":")) for event in events],
                 [event.payload_bytes for event in events],
+                [
+                    json.dumps(item, separators=(",", ":"))
+                    for item in (redactions or [[] for _ in events])
+                ],
             ),
         )
         # rowcount is not available under pipeline mode until the results are

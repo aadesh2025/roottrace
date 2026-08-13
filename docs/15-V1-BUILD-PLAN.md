@@ -206,6 +206,18 @@ Every pattern from `03` §S1: AWS keys, GitHub tokens, JWTs, private keys, provi
 
 **Accept:** A payload seeded with one of each pattern emerges fully redacted, with `redactions` recording `{path, kind}` and never the value. No false positives on 500 lines of ordinary source code.
 
+**Done.** 36 tests. Every pattern from `03` §S1 — AWS, GitHub (classic and fine-grained), provider keys, Slack, JWTs, private keys, DSN credentials, our own ingest keys, Supabase keys, emails, Luhn-valid cards, high entropy — plus the header allowlist. Wired into `POST /v1/events` before anything is persisted, with the redactions stored on the row.
+
+Three decisions worth recording:
+
+- **Headers are dropped, not redacted.** An allowlist cannot be defeated by a header nobody thought of; a denylist can. `Authorization` and `Cookie` therefore never reach storage in any form.
+- **Cards are confirmed by Luhn, not by shape.** A 16-digit order number is not a card, and redacting one would remove the identifier an engineer needs to find the failing request.
+- **Entropy applies only to undelimited tokens.** `03` §S1 says "in a value position"; in practice a stack trace sits near the 4.5 threshold across its whole length, and `repr` escapes newlines so a CSV excerpt in a local variable looks like one long high-entropy token. Both restrictions are deliberate false-negative trades, stated in the code: a credential containing a comma slips past *this* rule, and the named patterns — which do not depend on it — are what catch every format we know.
+
+The false-positive criterion is tested against the **synthetic repository**, ~1,800 lines, rather than a hand-picked sample: code chosen for the test would be code already known to be safe. Running it over our own corpus found a real false positive (`resource-01`'s CSV variable) and a double-redaction bug where a cleaned DSN was re-flagged as high entropy — both fixed, both now covered.
+
+This module is deliberately **stricter than log redaction** (`11` §8.3). That one runs over our own log lines where a false positive destroys an operator's evidence; this one runs over customer payloads where a false negative persists a secret forever. Same project, opposite tolerance for error.
+
 ### T2.3 Fingerprinting
 
 `normalize_message`, `top_in_app_frames`, `compute_fingerprint`, custom rules, atomic upsert.

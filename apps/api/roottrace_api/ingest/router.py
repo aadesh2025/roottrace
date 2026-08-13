@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from dataclasses import replace
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Header, Request, Response
@@ -28,7 +29,8 @@ from fastapi import APIRouter, Header, Request, Response
 from roottrace_api.context import current_request_id
 from roottrace_api.errors import ApiError, error_response
 from roottrace_api.ingest import idempotency, keys, ratelimit, repository
-from roottrace_api.ingest.events import MAX_BATCH_SIZE, validate_batch
+from roottrace_api.ingest.events import MAX_BATCH_SIZE, ValidatedEvent, validate_batch
+from roottrace_api.ingest.sanitise import sanitise
 from roottrace_api.log import get_logger
 
 logger = get_logger(__name__)
@@ -41,17 +43,6 @@ MAX_BODY_BYTES = 5 * 1024 * 1024
 #: `03` §S1 step 9. The worker consumes this (ARQ, W2); the contract between
 #: them is the queue name and the payload shape, not a shared library.
 INGEST_QUEUE = "rt:ingest"
-
-
-def sanitise(payload: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, str]]]:
-    """Step 6 — implemented by **T2.2**.
-
-    Deliberately a no-op that returns no redactions, rather than a handful of
-    patterns that would make the step look done. `11` SC25's corpus is the
-    acceptance criterion, and a partial matcher here would report `redactions:
-    []` for a payload full of secrets — the most misleading possible output.
-    """
-    return payload, []
 
 
 @router.post("/events", status_code=202)
@@ -174,11 +165,14 @@ async def _persist(
             details=[item.as_error() for item in validation.rejected],
         )
 
-    accepted = list(validation.accepted)
-    for index, event in enumerate(accepted):
-        cleaned, _redactions = sanitise(event.payload)
-        accepted[index] = event  # sanitise is a no-op until T2.2
-        del cleaned
+    # Step 6, before anything is persisted. The redactions travel with the row
+    # so the UI can show THAT something was removed without storing what.
+    accepted: list[ValidatedEvent] = []
+    redactions: list[list[dict[str, str]]] = []
+    for event in validation.accepted:
+        cleaned, found = sanitise(event.payload)
+        accepted.append(replace(event, payload=cleaned))
+        redactions.append(found)
 
     batch_id = uuid.uuid4()
     # Pipelined: scoping the transaction costs two statements before the
