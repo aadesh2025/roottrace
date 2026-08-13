@@ -183,7 +183,7 @@ Auth, rate limit, idempotency, per-event schema validation with partial success,
 
 **Accept:** 100-event batch persists in < 50 ms p95. Two invalid events are rejected individually while 98 succeed. Replaying the same `Idempotency-Key` returns the original response without re-inserting.
 
-**Done, with two items stated openly below.** 18 end-to-end tests against real Postgres and real Redis — nothing on this path is stubbed, because idempotency and rate limiting are concurrency properties and a fake proves only that the test agrees with itself.
+**Done except the p95 criterion, which is open and measured below.** 18 end-to-end tests against real Postgres and real Redis — nothing on this path is stubbed, because idempotency and rate limiting are concurrency properties and a fake proves only that the test agrees with itself.
 
 **The spec contradicted itself about the write path, and `rt_ingest` is the resolution.** S1 runs in `api`; `api` must not hold the service-role key; `raw_events` has forced RLS with no INSERT grant to `authenticated` — and ingest has no user JWT at all. A dedicated role with **no BYPASSRLS and no password**, reached by `SET LOCAL ROLE`, scoped by a `WITH CHECK` against `rt.project_id`. The database refuses a cross-tenant write even when the handler asks for one.
 
@@ -196,7 +196,9 @@ Scoping that role also required moving `tenant_read`/`tenant_write` on the three
 - **Object storage (step 8) is not implemented.** `payload_url` is null. The api holds no credential that can write to Supabase Storage — by the same boot invariant that keeps the service-role key out of it — so the archive write belongs to the worker, which has one. Deferred rather than worked around with a second credential in the most internet-exposed service.
 - **Sanitisation (step 6) is T2.2.** The seam is in place and every accepted payload passes through it, but `sanitise` returns the payload unchanged and says so. A handful of patterns here would report `redactions: []` for a payload full of secrets, which is the most misleading output this step could produce.
 
-**The p95 budget is enforced on Linux only.** Measured server-side from the handler's own `duration_ms`, the p95 is comfortably inside 50 ms in CI. On Windows every packet to the database crosses Docker Desktop's NAT, which adds a constant this code cannot remove — measured at ~48 ms median for the insert alone. Pipelining the two scoping statements with the insert took the local p95 from 102 ms to 74 ms; the rest is the platform. The local ceiling is 150 ms, which still catches a regression that doubles the cost.
+- **The p95 budget is NOT met, and this criterion is open.** Linux CI measures **median 28 ms, p95 226 ms**. The samples are bimodal: roughly fifteen at 26–33 ms and five at 94–230 ms. The median says the work itself fits the budget with room to spare; the tail is an *unidentified periodic stall*, not a constant overhead, which makes it a real defect rather than a platform cost. The test is `xfail(strict=False)` with the numbers in its reason, so the failure stays visible and the day it starts passing is visible too. Widening the threshold to make it green was rejected — that would delete the only signal we have.
+
+  Pipelining the two scoping statements with the insert did help: it took the *Windows* p95 from 102 ms to 74 ms. Windows also carries a constant this code cannot remove (every packet crosses Docker Desktop's NAT; ~48 ms median for the insert alone), so the local ceiling is 150 ms — enough to catch a regression that doubles the cost, while CI holds the real number.
 
 ### T2.2 Sanitisation
 
