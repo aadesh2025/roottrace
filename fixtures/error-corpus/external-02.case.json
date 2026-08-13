@@ -11,7 +11,7 @@
   "bug_description": "PaymentClient.charge reads the Retry-After header and then discards it, so a routine 429 becomes a customer-visible failure.",
   "api_event": "fixtures/error-corpus/external-02.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "783da2da928d8c9f19f2377d8c6ec17e",
     "issue_error_type": "RateLimited",
     "relevant_files": [
       "clients/payment_client.py",

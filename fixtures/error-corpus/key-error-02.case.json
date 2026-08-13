@@ -11,7 +11,7 @@
   "bug_description": "apply_coupon indexes an optional request body field that the client only sends when a code was typed.",
   "api_event": "fixtures/error-corpus/key-error-02.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "27c82a4572f20d896b81bd6ebdd2f246",
     "issue_error_type": "KeyError",
     "relevant_files": [
       "api/routes/cart.py"

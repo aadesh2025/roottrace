@@ -11,7 +11,7 @@
   "bug_description": "EXPORT_BATCH_SIZE is present in the production manifest and absent in staging, so export_batch_size is None in exactly one environment.",
   "api_event": "fixtures/error-corpus/config-02.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "5c76afd813258f9b7290b5d42b4602b8",
     "issue_error_type": "TypeError",
     "relevant_files": [
       "config/settings.py",

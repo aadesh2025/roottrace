@@ -11,7 +11,7 @@
   "bug_description": "The payment provider serialises amount as a decimal string; charge_cart adds it directly to a Decimal.",
   "api_event": "fixtures/error-corpus/type-mismatch-01.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "6761d00bfbd624568e78b0c536fceb25",
     "issue_error_type": "TypeError",
     "relevant_files": [
       "clients/payment_client.py",

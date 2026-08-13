@@ -224,6 +224,16 @@ This module is deliberately **stricter than log redaction** (`11` §8.3). That o
 
 **Accept:** All parametrised cases from `14` §3 pass. 100 concurrent identical inserts produce exactly one issue with `occurrence_count = 100`.
 
+**Done.** 40 tests: `14` §3's four parametrised cases verbatim, every `normalize_message` rule, `top_in_app_frames`, custom rules, and the upsert raced against real Postgres.
+
+**The concurrency criterion is run as a real race**, not as a code path — 100 concurrent upserts of one fingerprint produce one issue with `occurrence_count = 100`, and exactly one of the hundred reports `is_new_issue`. A read-then-write formulation passes every sequential test and fails this one; `(xmax = 0)` is how the statement reports which branch it took, and a second query to find out would reopen the race the upsert exists to close.
+
+Both directions are tested throughout. A fingerprint function returning a constant would pass every "these group together" case on its own, so each is paired with a "these must not" — different function in the same file, different exception type, different route, different project.
+
+**The 25 corpus fingerprints are now populated**, computed by `compute_fingerprint` itself, and `test_fingerprints_are_left_for_the_implementation` inverts exactly as T3.2 said it would. They are asserted to be distinct: a collision would merge two cases in the evaluation harness and every metric computed over them would silently describe the wrong pair.
+
+Two properties beyond the stated criteria, both about how storms actually behave: a late occurrence cannot rewind `last_seen` (a buffered SDK flushing after a partition would make an active issue look dormant), and a resolved issue that recurs becomes `regressed` rather than merely `open` — the difference between "known" and "we thought we fixed this".
+
 ### T2.4 Triage
 
 Severity scoring, investigation gating, cooldown, quota check.

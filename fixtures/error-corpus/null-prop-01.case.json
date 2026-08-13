@@ -11,7 +11,7 @@
   "bug_description": "TaxClient.get_rate catches HTTPStatusError and returns None on any non-200, so a 503 yields None where a Decimal is expected.",
   "api_event": "fixtures/error-corpus/null-prop-01.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "8d6bd2e9143ab05d83885ce913c2a4ad",
     "issue_error_type": "TypeError",
     "relevant_files": [
       "clients/tax_client.py",

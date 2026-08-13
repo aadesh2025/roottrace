@@ -11,7 +11,7 @@
   "bug_description": "render_row reaches two levels into order['user']['email']; guest checkout produces orders with no user key.",
   "api_event": "fixtures/error-corpus/key-error-03.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "ff2a83553b8865dc5a7c0ec63349625f",
     "issue_error_type": "KeyError",
     "relevant_files": [
       "services/export.py",

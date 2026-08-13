@@ -11,7 +11,7 @@
   "bug_description": "eu-north was added to the load balancer and the signup form but never to REGION_CONFIG, and region_config indexes it directly.",
   "api_event": "fixtures/error-corpus/config-01.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "731d203e2a47c973c63f4a263e64e6d2",
     "issue_error_type": "KeyError",
     "relevant_files": [
       "config/regions.py",

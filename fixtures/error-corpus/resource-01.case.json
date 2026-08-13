@@ -11,7 +11,7 @@
   "bug_description": "export_all renders every row into a list before writing any of them, so peak memory grows with the export and the size guard runs only after the peak.",
   "api_event": "fixtures/error-corpus/resource-01.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "6454bbe7e601017e4b11fd8167360ff7",
     "issue_error_type": "ValueError",
     "relevant_files": [
       "services/export.py",

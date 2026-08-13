@@ -11,7 +11,7 @@
   "bug_description": "decrement reads, checks and writes stock with nothing holding the three together, so concurrent checkouts each sell the last unit.",
   "api_event": "fixtures/error-corpus/race-01.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "92451fed1e7f1c217adbfcc493c9d22d",
     "issue_error_type": "ValueError",
     "relevant_files": [
       "services/inventory.py"

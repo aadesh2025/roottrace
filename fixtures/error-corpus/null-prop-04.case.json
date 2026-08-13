@@ -11,7 +11,7 @@
   "bug_description": "discount_profile is None for users who never held a paid plan; _discount_percent reads percent_off from it three frames above the arithmetic.",
   "api_event": "fixtures/error-corpus/null-prop-04.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "41e91fc2753070bc0d071ee0aa3641b6",
     "issue_error_type": "AttributeError",
     "relevant_files": [
       "services/checkout.py",

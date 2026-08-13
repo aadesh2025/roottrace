@@ -11,7 +11,7 @@
   "bug_description": "subtotal_with_tax stopped applying its tax_rate in v2.14.2 without its name or signature changing, so the cart page displays the untaxed figure.",
   "api_event": "fixtures/error-corpus/regression-03.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "1504b7c5742a759091af2d20ed9d4dad",
     "issue_error_type": "ValueError",
     "relevant_files": [
       "services/cart.py"

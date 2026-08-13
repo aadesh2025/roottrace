@@ -11,7 +11,7 @@
   "bug_description": "TypedRegistry.merge accepts an unparameterised registry, so string prices land in a TypedRegistry[Decimal] and fail at the first arithmetic.",
   "api_event": "fixtures/error-corpus/type-mismatch-03.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "20bd9c58a048e1731cbeadb3895ddaf3",
     "issue_error_type": "TypeError",
     "relevant_files": [
       "models/config.py",

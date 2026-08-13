@@ -11,7 +11,7 @@
   "bug_description": "verify_signature indexes headers['signature'] directly; the provider's retry probe sends no signature header.",
   "api_event": "fixtures/error-corpus/key-error-01.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "ca69cd65198beda018b0b8dd39a77a5d",
     "issue_error_type": "KeyError",
     "relevant_files": [
       "api/routes/webhooks.py"

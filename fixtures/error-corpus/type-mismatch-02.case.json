@@ -11,7 +11,7 @@
   "bug_description": "InventoryClient.fetch_item returns the decoded JSON dict; InventoryService.describe accesses attributes on it.",
   "api_event": "fixtures/error-corpus/type-mismatch-02.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "f0328bf7ede19e066f8a17e203da6be8",
     "issue_error_type": "AttributeError",
     "relevant_files": [
       "clients/inventory_client.py",

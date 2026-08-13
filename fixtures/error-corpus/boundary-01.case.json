@@ -11,7 +11,7 @@
   "bug_description": "Pagination is 1-based but page() slices as though it were 0-based, so the first line item is unreachable and the last page comes back empty.",
   "api_event": "fixtures/error-corpus/boundary-01.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "06d820461d2ae95a6ce11947f77e7142",
     "issue_error_type": "IndexError",
     "relevant_files": [
       "services/cart.py",

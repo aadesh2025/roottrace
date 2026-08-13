@@ -11,7 +11,7 @@
   "bug_description": "reserve has no circuit breaker, so every request pays the full failure cost for the whole outage instead of failing fast after the first.",
   "api_event": "fixtures/error-corpus/external-03.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "c7e87b795001f2b82b52482f17195f8e",
     "issue_error_type": "UpstreamUnavailable",
     "relevant_files": [
       "clients/inventory_client.py",

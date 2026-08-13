@@ -11,7 +11,7 @@
   "bug_description": "apply_discount gained a required region parameter in v2.14.2; discounted_subtotal was the one caller not updated.",
   "api_event": "fixtures/error-corpus/regression-01.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "eaedd8589f6b61fc13a4e5c641de969b",
     "issue_error_type": "TypeError",
     "relevant_files": [
       "services/pricing.py",

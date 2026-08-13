@@ -11,7 +11,7 @@
   "bug_description": "chunk() slices rows[start:start+size-1], dropping the last row of every batch and producing empty batches at size 1.",
   "api_event": "fixtures/error-corpus/boundary-02.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "cff65f2bd0bf82b99a692e0d6f1ff558",
     "issue_error_type": "IndexError",
     "relevant_files": [
       "services/export.py"

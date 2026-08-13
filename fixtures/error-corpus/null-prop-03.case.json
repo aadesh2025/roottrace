@@ -11,7 +11,7 @@
   "bug_description": "tax_service_url is optional and defaults to None; pricing.tax_service_rate concatenates it without checking.",
   "api_event": "fixtures/error-corpus/null-prop-03.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "dfc4c3e0f2082b3f7fc8e9c3b7f5221e",
     "issue_error_type": "TypeError",
     "relevant_files": [
       "config/settings.py",

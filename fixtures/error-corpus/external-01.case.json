@@ -11,7 +11,7 @@
   "bug_description": "reserve_for_cart makes one serial call per line item with no retry and no overall deadline; the traceback names the timeout handler, not the loop.",
   "api_event": "fixtures/error-corpus/external-01.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "c8f18dee5b1ee57e613c2a18b4fa19a1",
     "issue_error_type": "UpstreamTimeout",
     "relevant_files": [
       "services/inventory.py",

@@ -11,7 +11,7 @@
   "bug_description": "total_from_cache checks the process-global rate cache and then reads it again; an invalidation between the two returns None to code that proved it was present.",
   "api_event": "fixtures/error-corpus/race-02.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "c19e528599d57543220470fdf8e55cf0",
     "issue_error_type": "TypeError",
     "relevant_files": [
       "services/pricing.py"

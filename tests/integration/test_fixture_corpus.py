@@ -325,12 +325,29 @@ def test_no_payload_carries_a_memory_address(case_id: str) -> None:
 
 
 @pytest.mark.parametrize("case_id", CASE_IDS)
-def test_fingerprints_are_left_for_the_implementation(case_id: str) -> None:
-    """`fingerprint` is null on every case, and that is deliberate.
+def test_the_fingerprint_matches_the_real_algorithm(case_id: str) -> None:
+    """Inverted at T2.3, exactly as it said it would be.
 
-    S2's algorithm does not exist until T2.3. A hand-written fingerprint would
-    be a number the implementation is then forced to reproduce by coincidence
-    — and if it did not, the "ground truth" would be wrong rather than the
-    code. T2.3 fills these in from the real algorithm and this test inverts.
+    These were null through T3.2 because S2's algorithm did not exist yet, and
+    a hand-written fingerprint would have been a number the implementation was
+    later forced to reproduce by coincidence — and if it had not, the "ground
+    truth" would have been the thing that was wrong.
+
+    They are now computed by `compute_fingerprint` itself, so this asserts the
+    committed corpus still agrees with the code rather than asserting the code
+    agrees with itself: a change to the algorithm that silently regroups the
+    corpus fails here.
     """
-    assert case(case_id)["expected"]["fingerprint"] is None
+    from roottrace_api.ingest.fingerprint import compute_fingerprint
+
+    expected = case(case_id)["expected"]["fingerprint"]
+    assert expected is not None
+    assert expected == compute_fingerprint(payload(case_id)["events"][0])
+
+
+def test_all_25_fingerprints_are_distinct() -> None:
+    """Twenty-five different bugs must be twenty-five issues. A collision
+    would merge two cases in the harness, and every metric computed over them
+    would silently describe the wrong pair."""
+    fingerprints = {case(case_id)["expected"]["fingerprint"] for case_id in CASE_IDS}
+    assert len(fingerprints) == 25

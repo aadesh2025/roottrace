@@ -11,7 +11,7 @@
   "bug_description": "CartService.get_item returns None for a SKU that is not in the cart, and increase_quantity dereferences it.",
   "api_event": "fixtures/error-corpus/null-prop-02.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "4674b5b4698e0ad302cedf396cff660d",
     "issue_error_type": "AttributeError",
     "relevant_files": [
       "services/cart.py",

@@ -11,7 +11,7 @@
   "bug_description": "During a tax-service outage the quote falls back to the untaxed subtotal while checkout adds tax, so reconciliation stops every order. The obvious first patch breaks tests/test_quote.py::test_estimate_with_missing_tax.",
   "api_event": "fixtures/error-corpus/regression-02.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "d54c38ff0698aea52a05cc56d6d49806",
     "issue_error_type": "ValueError",
     "relevant_files": [
       "services/quote.py",

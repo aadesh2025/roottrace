@@ -11,7 +11,7 @@
   "bug_description": "The external inventory service returned 503 during a scheduled maintenance window. InventoryClient.reserve already raises a typed, named UpstreamUnavailable and the caller propagates it correctly; there is no defect in this repository to fix.",
   "api_event": "fixtures/error-corpus/unfixable-01.json",
   "expected": {
-    "fingerprint": null,
+    "fingerprint": "28ef5aed816aa0367f0ea00d65456cf0",
     "relevant_files": [
       "clients/inventory_client.py",
       "services/inventory.py"
