@@ -183,6 +183,21 @@ Auth, rate limit, idempotency, per-event schema validation with partial success,
 
 **Accept:** 100-event batch persists in < 50 ms p95. Two invalid events are rejected individually while 98 succeed. Replaying the same `Idempotency-Key` returns the original response without re-inserting.
 
+**Done, with two items stated openly below.** 18 end-to-end tests against real Postgres and real Redis — nothing on this path is stubbed, because idempotency and rate limiting are concurrency properties and a fake proves only that the test agrees with itself.
+
+**The spec contradicted itself about the write path, and `rt_ingest` is the resolution.** S1 runs in `api`; `api` must not hold the service-role key; `raw_events` has forced RLS with no INSERT grant to `authenticated` — and ingest has no user JWT at all. A dedicated role with **no BYPASSRLS and no password**, reached by `SET LOCAL ROLE`, scoped by a `WITH CHECK` against `rt.project_id`. The database refuses a cross-tenant write even when the handler asks for one.
+
+Scoping that role also required moving `tenant_read`/`tenant_write` on the three tables ingest touches to `TO authenticated`. The alternative — granting a **write-only** role read access to every project's membership so it could satisfy a policy that can only ever return false for it — was rejected.
+
+**`GITHUB_MODE`-style parity for the queue:** step 9 enqueues to `rt:ingest` in Redis. ARQ consumes it in W2; the contract between them is the queue name and the payload shape.
+
+**Open, deliberately:**
+
+- **Object storage (step 8) is not implemented.** `payload_url` is null. The api holds no credential that can write to Supabase Storage — by the same boot invariant that keeps the service-role key out of it — so the archive write belongs to the worker, which has one. Deferred rather than worked around with a second credential in the most internet-exposed service.
+- **Sanitisation (step 6) is T2.2.** The seam is in place and every accepted payload passes through it, but `sanitise` returns the payload unchanged and says so. A handful of patterns here would report `redactions: []` for a payload full of secrets, which is the most misleading output this step could produce.
+
+**The p95 budget is enforced on Linux only.** Measured server-side from the handler's own `duration_ms`, the p95 is comfortably inside 50 ms in CI. On Windows every packet to the database crosses Docker Desktop's NAT, which adds a constant this code cannot remove — measured at ~48 ms median for the insert alone. Pipelining the two scoping statements with the insert took the local p95 from 102 ms to 74 ms; the rest is the platform. The local ceiling is 150 ms, which still catches a regression that doubles the cost.
+
 ### T2.2 Sanitisation
 
 Every pattern from `03` §S1: AWS keys, GitHub tokens, JWTs, private keys, provider keys, high-entropy strings, emails, Luhn-valid card numbers, header allowlist, field caps.

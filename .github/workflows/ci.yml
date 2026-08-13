@@ -81,6 +81,26 @@ jobs:
   integration:
     name: integration (RLS + partitions, real Postgres)
     runs-on: ubuntu-latest
+
+    # Redis is not part of the Supabase stack, so CI provides it the platform's
+    # own way: a service container, started before any step runs. `make
+    # redis-up` is a no-op here and says so, rather than racing this.
+    services:
+      redis:
+        image: redis@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    env:
+      # Matches the port `make redis-up` publishes locally, so the same command
+      # works in both places.
+      RT_REDIS_URL: redis://127.0.0.1:6380/0
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

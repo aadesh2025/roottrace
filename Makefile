@@ -21,6 +21,17 @@ SUPABASE ?= ./node_modules/.bin/supabase
 #     --format '{{println .Manifest.Digest}}'
 GITLEAKS_IMAGE ?= zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
 
+# Currently redis 7-alpine. Bump with:
+#   docker buildx imagetools inspect redis:<tag> --format '{{println .Manifest.Digest}}'
+REDIS_IMAGE ?= redis@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
+
+# Deliberately not 6379. Developer machines routinely already run something
+# there, and binding the default would either fail or silently point the test
+# suite at an unrelated project's Redis — which the idempotency tests would
+# then flush.
+REDIS_PORT ?= 6380
+LOCAL_REDIS_URL = redis://127.0.0.1:$(REDIS_PORT)/0
+
 # The coverage ratchet (docs/A3 §6.1). MONOTONIC: this may only ever be raised.
 # Lowering it requires a commit that says why. Phase 1 measured without
 # enforcing; Phase 4 (T1.5) raises it to 60, Phase 6 to 75, Phase 10 to 80,
@@ -55,7 +66,7 @@ SUPABASE_SECRET_CMD = $(SUPABASE) status --workdir infra -o env \
 .DEFAULT_GOAL := help
 .PHONY: help bootstrap check fmt fmt-check lint typecheck \
         test-unit test-integration test-security test-e2e \
-        dev db-reset fixtures-reset fixture-run fixtures-verify \
+        dev db-reset redis-up fixtures-reset fixture-run fixtures-verify \
         eval eval-compare audit ci
 
 # ── Meta ───────────────────────────────────────────────────────────────────
@@ -115,13 +126,15 @@ test-integration: ## pytest -m integration (against the local Supabase stack)
 	  echo "test-integration: Supabase is not running. Start it with:"; \
 	  echo "    make db-reset"; \
 	  exit 1; }
-	ROOTTRACE_TEST_ADMIN_KEY="$$($(SUPABASE_SECRET_CMD))" $(UV) run pytest -m integration
+	ROOTTRACE_TEST_ADMIN_KEY="$$($(SUPABASE_SECRET_CMD))" \
+	  RT_REDIS_URL="$(LOCAL_REDIS_URL)" $(UV) run pytest -m integration
 
 test-security: ## pytest -m security — RLS, sandbox isolation, injection corpus
 	@$(SUPABASE) status --workdir infra >/dev/null 2>&1 || { \
 	  echo "test-security: Supabase is not running. Start it with: make db-reset"; \
 	  exit 1; }
-	ROOTTRACE_TEST_ADMIN_KEY="$$($(SUPABASE_SECRET_CMD))" $(UV) run pytest -m security
+	ROOTTRACE_TEST_ADMIN_KEY="$$($(SUPABASE_SECRET_CMD))" \
+	  RT_REDIS_URL="$(LOCAL_REDIS_URL)" $(UV) run pytest -m security
 	@# The >=95% security-critical floor (docs/A3 §6.1), which applies to auth,
 	@# RLS and tenancy code from the phase that introduces each.
 	@#
@@ -159,10 +172,32 @@ dev: ## supabase start · redis · api · worker
 	@echo "dev: enabled by T1.5 (API skeleton). Supabase alone: make db-reset."
 	@exit 1
 
-db-reset: ## supabase db reset + seed (starts the stack if it is down)
+db-reset: redis-up ## supabase db reset + seed (starts the stack if it is down)
 	@$(SUPABASE) status --workdir infra >/dev/null 2>&1 \
 	  && $(SUPABASE) db reset --workdir infra \
 	  || $(SUPABASE) start --workdir infra
+
+redis-up: ## Start the local Redis (queue, idempotency, rate limits)
+	@# Not part of the Supabase stack, so it is ours to run. Pinned by digest
+	@# like every other image (docs/13 §3) — a tag can be re-pointed.
+	@#
+	@#
+	@# Port 6380, not 6379. A developer machine very often already has something
+	@# on the default port; binding it would either fail this target or, worse,
+	@# point the suite at an unrelated project's Redis — which the idempotency
+	@# tests would then flush.
+	@#
+	@# In CI this target is a no-op: the workflow provides Redis as a service
+	@# container, which is the platform's own mechanism and starts before any
+	@# step runs.
+	@if [ -n "$$CI" ]; then \
+	  echo "redis-up: provided by the CI service container."; \
+	else \
+	  docker start rt-redis >/dev/null 2>&1 \
+	    || MSYS_NO_PATHCONV=1 docker run -d --name rt-redis \
+	         -p $(REDIS_PORT):6379 $(REDIS_IMAGE) >/dev/null; \
+	  echo "redis-up: listening on 127.0.0.1:$(REDIS_PORT)"; \
+	fi
 
 # ── Fixtures ───────────────────────────────────────────────────────────────
 

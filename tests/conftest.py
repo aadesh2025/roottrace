@@ -10,7 +10,9 @@ ship. `make db-reset` gives every run the same known state.
 
 from __future__ import annotations
 
+import asyncio
 import os
+import sys
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -18,6 +20,18 @@ from typing import Any
 
 import psycopg
 import pytest
+
+# psycopg's async driver cannot run on Windows' default ProactorEventLoop:
+# "Psycopg cannot use the 'ProactorEventLoop' to run in async mode." CI is
+# Linux and unaffected, and production runs Linux too — but a developer on
+# Windows would otherwise see every async database test fail for a reason that
+# has nothing to do with the code under test.
+#
+# Set here rather than in application code: the constraint belongs to the
+# process that hosts the loop, and `serve.py` on Linux must not carry a
+# Windows workaround.
+if sys.platform == "win32":  # pragma: no cover — platform-specific
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 DEFAULT_DSN = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 

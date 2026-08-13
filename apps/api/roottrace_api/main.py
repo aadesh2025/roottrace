@@ -8,13 +8,18 @@ rather than at import, and so a test can build an app around a specific
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
+import redis.asyncio as aioredis
 from fastapi import Depends, FastAPI
+from psycopg_pool import AsyncConnectionPool
 
 from roottrace_api import __version__
 from roottrace_api.auth.dependencies import CurrentUser, get_settings
 from roottrace_api.errors import register_error_handlers
+from roottrace_api.ingest.router import router as ingest_router
 from roottrace_api.log import configure_logging, get_logger
 from roottrace_api.middleware import RequestContextMiddleware, SecurityHeadersMiddleware
 from roottrace_api.settings import Settings
@@ -32,9 +37,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings)
 
+    @asynccontextmanager
+    async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        """Open the connections ingest needs, and close them.
+
+        A pool rather than a connection per request: the ingest path has a
+        50 ms p95 budget and a TCP handshake plus TLS would spend most of it.
+        `open=False` then `open()` so a construction failure surfaces here
+        rather than on the first request.
+        """
+        pool = AsyncConnectionPool(settings.database_url, min_size=1, max_size=10, open=False)
+        await pool.open()
+        application.state.db_pool = pool
+        # `from_url` is untyped in redis-py's stubs; the call is checked at
+        # runtime by the connection it opens on the first request.
+        application.state.redis = aioredis.from_url(  # type: ignore[no-untyped-call]
+            settings.redis_url, decode_responses=True
+        )
+        try:
+            yield
+        finally:
+            await application.state.redis.aclose()
+            await pool.close()
+
     app = FastAPI(
         title="RootTrace AI",
         version=__version__,
+        lifespan=lifespan,
         # CORS is deliberately absent until the dashboard origin exists (T8.2).
         # With no CORS middleware the browser default is that no cross-origin
         # page can read a response, which is the safe direction to be wrong in;
@@ -56,6 +85,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware, settings=settings)
 
     register_error_handlers(app)
+    app.include_router(ingest_router)
     _register_routes(app)
 
     logger.info(
