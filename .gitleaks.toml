@@ -17,6 +17,21 @@ regex = '''\brt_live_[0-9a-f]{32}\b'''
 keywords = ["rt_live_"]
 
 [[rules]]
+id = "roottrace-ingest-key-test"
+description = "RootTrace test-mode ingest API key (docs/05 §API keys)"
+# `05` §2.1 gives the format as rt_{live|test}_{32 hex}. Only the `live` half
+# was scanned until T2.5 — and a `test` key is a real credential for a real
+# project, not a placeholder. The gap was found while adding the SDK, which
+# put key-shaped strings in a dozen test files for the first time.
+#
+# Nothing in the repository is allowlisted against this: the suite builds its
+# fake keys by concatenation (`"rt_test_" + "0" * 32`), so no key-shaped
+# literal exists to excuse. Keep it that way — an allowlist entry here would
+# be the fail-open version of this rule.
+regex = '''\brt_test_[0-9a-f]{32}\b'''
+keywords = ["rt_test_"]
+
+[[rules]]
 id = "supabase-service-role-jwt"
 description = "Supabase service-role key — bypasses RLS entirely (docs/A3 §6)"
 regex = '''\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\b'''

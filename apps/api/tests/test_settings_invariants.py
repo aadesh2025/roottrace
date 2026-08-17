@@ -189,3 +189,20 @@ def test_evidence_binding_cannot_be_disabled_anywhere() -> None:
 def test_auto_merge_is_refused_before_v3() -> None:
     with pytest.raises(ValidationError, match="auto-merge not permitted"):
         settings(ff_auto_merge=True)
+
+
+def test_every_api_key_prefix_the_spec_defines_has_a_gitleaks_rule() -> None:
+    """`05` §2.1 gives the format as `rt_{live|test}_{32 hex}`. Both halves are
+    real credentials for a real project.
+
+    Only `rt_live_` was scanned until T2.5. A rule that covers half a format is
+    the shape of control this project treats most seriously: it reports clean
+    on the half it does not read, and nothing says which half that is.
+    """
+    repo_root = Path(__file__).resolve().parents[3]
+    config = (repo_root / ".gitleaks.toml").read_text(encoding="utf-8")
+
+    missing = [
+        prefix for prefix in ("rt_live_", "rt_test_") if rf"\b{prefix}[0-9a-f]{{32}}" not in config
+    ]
+    assert not missing, f"no gitleaks rule matches {missing} (docs/05 §2.1)"

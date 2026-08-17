@@ -150,6 +150,15 @@ A V1 deployment is therefore legitimately `RT_ENVIRONMENT=production` + `RT_DEPL
 | `RT_METRICS_PORT` | int | 9090 |
 | `RT_SENTRY_DSN` | SecretStr | — (our own error tracking) |
 
+### SDK (client-side, T2.5)
+
+Read by `roottrace_sdk` inside the **customer's** application, not by any of our services. Deliberately outside the `RT_` namespace: that prefix belongs to our `Settings` model, and the unrecognised-`RT_*` boot invariant (§6) would reject a variable it does not own — including one set by a customer who happens to run our stack too.
+
+| Variable | Type | Default | Notes |
+|---|---|---|---|
+| `ROOTTRACE_API_KEY` | str | — | `rt_{live\|test}_{32 hex}` (`05` §2.1). An explicit `init(api_key=…)` wins |
+| `ROOTTRACE_ENDPOINT` | str | `https://api.roottrace.ai/v1/events` | Must be HTTPS, or `http` on loopback — the key is sent on every request |
+
 ---
 
 ## 2. Feature flags
@@ -323,6 +332,24 @@ make dev        # supabase start · redis · api · worker
 make fixtures-reset
 make fixture-run CASE=null-prop-01
 ```
+
+#### Windows: `supabase start` fails to bind 54322
+
+```
+ports are not available: exposing port TCP 0.0.0.0:54322 …
+An attempt was made to access a socket in a way forbidden by its access permissions
+```
+
+Not a permissions problem despite the wording. Windows' NAT service reserves blocks of ephemeral ports, and while the stack is stopped it can claim a range containing 54322 — after which the database container can never start. Confirm with `netsh interface ipv4 show excludedportrange protocol=tcp`; if a range covers 54322, the reservation is the cause.
+
+Clearing it requires an **elevated** shell:
+
+```
+net stop winnat
+net start winnat
+```
+
+That briefly drops port forwarding for *every* Docker container on the machine, so do it deliberately rather than reflexively. Recorded at T2.5, where it cost most of an hour and looked exactly like a broken test run: Kong stayed "Up" while refusing connections, and the integration suite blocked on the first test that reached it rather than failing.
 
 ### 5.1 Local authentication (A4)
 

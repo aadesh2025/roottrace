@@ -616,21 +616,23 @@ Every 5xx response includes `request_id`, which correlates to a structured log e
 
 ## 10. SDK surface (Python, V1)
 
+Distribution `roottrace-sdk`; import name `roottrace_sdk`. *(Corrected at T2.5 — this section said `import roottrace`. A distribution and import name that differ is a well-known papercut, `beautifulsoup4`/`bs4` being the canonical example, and there is no reason to inherit it. `import roottrace_sdk as roottrace` reads exactly as the examples below did.)*
+
 ```python
-import roottrace
+import roottrace_sdk as roottrace
 
 roottrace.init(
-    api_key=os.environ["ROOTTRACE_API_KEY"],
+    api_key=os.environ["ROOTTRACE_API_KEY"],   # or set ROOTTRACE_API_KEY
     environment="production",
     service="checkout-api",
     release=os.environ.get("GIT_SHA"),
     sample_rate=1.0,
-    before_send=lambda e: None if e.error.type == "ClientDisconnect" else e,
+    before_send=lambda e: None if e["error"]["type"] == "ClientDisconnect" else e,
     max_breadcrumbs=25,
 )
 
 # FastAPI
-from roottrace.integrations.fastapi import RootTraceMiddleware
+from roottrace_sdk.integrations.fastapi import RootTraceMiddleware
 app.add_middleware(RootTraceMiddleware)
 
 # Manual
@@ -641,9 +643,19 @@ except Exception:
 
 # Breadcrumbs — disproportionately valuable, see 03 §S1
 roottrace.add_breadcrumb(category="http", message="GET tax-service/rate → 503", level="warning")
+
+# Lifecycle — needed because sending is batched and asynchronous
+roottrace.flush(timeout=2.0)   # True if the buffer emptied in time
+roottrace.close(timeout=2.0)   # flush, then stop the sender
 ```
 
+`before_send` receives the event as a plain `dict`, not an object — `e["error"]["type"]`, not `e.error.type`. The attribute form in earlier drafts of this section was never implementable without shipping a model class in a package whose dependency set must stay empty.
+
 Client behaviour: batches up to 100 events or 5 s, whichever first; gzip; retries with exponential backoff on 5xx and 429; drops to a bounded local buffer (1,000 events) if the API is unreachable; **never raises into the host application** — an observability SDK that can crash the app it observes is worse than no SDK.
+
+**Local variables are not sent by default.** `03` §S1 shows `vars` on a frame marked "// redacted", but redaction happens at ingest — by which point a password held in a plain local has already left the customer's process, and neither the entropy rule nor the pattern list catches `hunter2`. `capture_locals=True` opts in, with client-side redaction of secret-shaped variable *names*.
+
+**`init` never raises, but a configuration mistake is written to stderr.** A malformed `api_key` disables reporting rather than degrading quietly: it would otherwise produce 401s, which the transport correctly refuses to retry, and the developer would see an application with no errors.
 
 ---
 

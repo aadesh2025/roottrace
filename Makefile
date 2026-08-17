@@ -44,7 +44,7 @@ LOCAL_REDIS_URL = redis://127.0.0.1:$(REDIS_PORT)/0
 # test that constructs Settings from the environment. It failed only in CI,
 # because `make` passes its own variables as make variables, not environment
 # ones.
-ROOTTRACE_COVERAGE_MIN_OVERALL ?= 60
+ROOTTRACE_COVERAGE_MIN_OVERALL ?= 75
 
 # The security-critical floor from docs/A3 §6.1, enforced from Phase 2. Applies
 # to auth, RLS and tenancy code. Also monotonic.

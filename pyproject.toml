@@ -136,7 +136,18 @@ disallow_untyped_defs = true
 # harness is excluded for a different reason: it imports that repo through a
 # runtime `sys.path` insert, which mypy cannot follow and should not, since
 # resolving those names would drag the unchecked repo back in.
-exclude = "^fixtures/(synthetic-repo|triggers)/"
+#
+# `conftest.py` is excluded for a third reason, added at T2.5. pytest resolves
+# a conftest per directory; mypy resolves modules by name, so a second
+# `conftest.py` anywhere in the tree is a hard "Duplicate module named
+# conftest" that stops the run before it checks anything. None of mypy's
+# suggested fixes work here — adding `__init__.py` still yields two modules
+# called `tests.conftest`, and the directories above them (`apps/api`,
+# `packages/sdk-python`) cannot be packages, one of them not even being a legal
+# identifier. Reshaping the test layout to satisfy the type checker is the
+# wrong trade: conftest files hold fixtures, and every test module that uses
+# them is still checked in full.
+exclude = "(^fixtures/(synthetic-repo|triggers)/|(^|/)conftest\\.py$)"
 
 # ── pytest ─────────────────────────────────────────────────────────────────
 

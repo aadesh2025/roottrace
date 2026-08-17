@@ -260,6 +260,40 @@ Two orderings are deliberate and asserted: `already_investigating` is reported b
 
 **Accept:** A demo FastAPI app throws an exception → the event arrives with parsed frames and breadcrumbs. Killing the API mid-run causes buffering, not a crash in the host app.
 
+**Done.** 171 unit tests plus 13 integration tests. **Both acceptance criteria are proved against real sockets** (`tests/integration/test_sdk_end_to_end.py`): a real FastAPI app under a real ASGI stack posting to a real HTTP listener, which is then genuinely killed and restarted. Neither half survives a fake transport — a stub returning "unreachable" tests our handling of a value we invented, not our handling of a closed socket, and `route_pattern` only exists because Starlette put it in the scope.
+
+The buffering half asserts three things, because only asserting the first would pass for an SDK that discards: the application still answers every request while the API is down; the events are **buffered**, with `dropped == 0` and nothing reaching an API that is not running; and all six arrive, de-duplicated by `event_id`, once it comes back.
+
+**The never-raises guarantee is tested by breaking seams, not by hoping.** "It did not raise" is satisfied equally well by code that never ran, so `_guard` reports every swallowed exception to a sink and each test asserts both halves — the documented default came back *and* the guard is what caught it. A positive control asserts the same call succeeds untouched. `KeyboardInterrupt` and `SystemExit` are asserted to still propagate: the guard catches `Exception`, not `BaseException`, because swallowing a `CancelledError` inside a middleware turns a cancelled request into a hung one.
+
+**The middleware re-raises**, and that is the one place the guarantee deliberately does not apply.
+
+Decisions worth recording:
+
+- **Zero dependencies**, so the transport is `urllib.request` and the middleware is raw ASGI with no `fastapi`/`starlette` import. The cost is three things duplicated from `apps/api` — UUIDv7, the header allowlist, and the payload shape — and `tests/integration/test_sdk_contract_agreement.py` is the only place both packages are imported together, failing if any of the three drifts. It also asserts the SDK's payload passes the server's **own** `validate_batch` and `sanitise`, rather than a shape asserted inside the SDK's tests.
+- **The event buffer drops the newest on overflow; the breadcrumb trail drops the oldest.** Opposite ends, opposite reasons: a buffer fills during an incident where the events are repetitions and the first ones carry the origin, while the breadcrumb contract is literally "the last N before the error".
+- **Breadcrumbs live in a `ContextVar`, and the middleware `set`s a new deque per request** rather than clearing the old one. A shared list interleaves concurrent requests and produces a report that names another request's database call — confidently wrong, which is worse than absent. Tested with an `asyncio.Barrier` so the interleaving is forced rather than hoped for.
+- **The sender thread starts lazily, on the first event, not in `init`.** `init` runs at import time and a pre-fork server forks after that; threads do not survive `fork`, so the child would buffer silently and drop everything once full. `os.register_at_fork` resets what a child inherits, and a pid check covers the platforms without it.
+- **Retries reuse the batch's idempotency key** (B7). A fresh key on the retry of a timed-out-but-persisted batch duplicates it and can buy a second paid pipeline run.
+- **A 4xx is dropped, not buffered.** Leaving a permanently-rejected batch at the head of the buffer blocks every event behind it forever — a revoked key would silence the SDK permanently rather than for as long as the key is revoked.
+- **`init` refuses a malformed `api_key` and says so on stderr.** It would otherwise produce 401s, which the transport correctly refuses to retry, and the developer would see an application with no errors — the failure mode with the longest time-to-discovery.
+- **The endpoint must be HTTPS, or loopback.** The key travels in an `Authorization` header on every request.
+- **`traceback.TracebackException`, not `StackSummary.extract(walk_tb(...))`.** The obvious spelling silently returns `colno = None` on every frame; the column test asserts against the raw source line rather than `>= 1`, which the broken version would also satisfy.
+
+Three deviations from the spec, all recorded in `05` §10 in the same commit:
+
+- **Import name.** §10 said `import roottrace`; the package is `roottrace_sdk`, matching the distribution `roottrace-sdk`. A distribution and import name that differ is the `beautifulsoup4`/`bs4` papercut and there is no reason to inherit it.
+- **`before_send` receives a `dict`,** not an object with `e.error.type`. The attribute form is not implementable in a package whose dependency set must stay empty.
+- **Local variables are off by default.** `03` §S1 shows `vars` marked "// redacted", but redaction happens at ingest — by which point a password in a plain local has already left the customer's process, and neither the entropy rule nor the pattern list catches `hunter2`. `capture_locals=True` opts in, with client-side redaction of secret-shaped names.
+
+**Two things are not implemented and are visible rather than silently absent.** The middleware does not capture a handler that catches its own error and returns a 500 itself: there is no exception object, and an event without `error.type` is rejected by `RT-INGEST-0011` — guessing a type from a status code would group every unrelated 500 in the service into one issue. And `request.body_sample` is never read by the middleware, because doing so means draining and replaying `receive` for every request whether or not it fails; it can be passed explicitly to `capture_exception`.
+
+**A gap in the secret scan was found and closed on the way.** `.gitleaks.toml` had a rule for `rt_live_` and none for `rt_test_`, although `05` §2.1 gives the format as `rt_{live|test}_{32 hex}` and a test-mode key is a real credential for a real project. Half a format is the shape of control this project treats most seriously: it reports clean on the half it does not read. Noticed because this ticket put key-shaped strings into a dozen test files for the first time. `test_every_api_key_prefix_the_spec_defines_has_a_gitleaks_rule` is the guard, and it was verified by disabling the new rule and watching it fail. Nothing is allowlisted against it — the suite builds its fake keys by concatenation, so no key-shaped literal exists to excuse, and an allowlist entry would be the fail-open version of the rule.
+
+`mypy`'s "Duplicate module named conftest" forced one configuration change: pytest resolves a conftest per directory, mypy resolves by module name, and a second `conftest.py` anywhere stops the run before it checks anything. None of mypy's suggested fixes apply — `__init__.py` still yields two `tests.conftest`, and `packages/sdk-python` is not a legal identifier. `conftest.py` is excluded from mypy; every test module that uses those fixtures is still checked.
+
+**Coverage ratchet raised 60 → 75** (§6.1's Phase 6 floor). Actual is 88%.
+
 ---
 
 ## 5. Week 3 — Fixtures
