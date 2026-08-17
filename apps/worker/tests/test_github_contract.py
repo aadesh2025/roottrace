@@ -419,8 +419,32 @@ async def test_search_symbol_finds_the_definition(gateway: GitHubGateway) -> Non
     assert "tests/conftest.py" in [hit.path for hit in hits]
 
 
+async def test_search_symbol_also_finds_call_sites(gateway: GitHubGateway) -> None:
+    """Broadened at T4.3: strategy B's "callers" resolution (`03` §S5) has no
+    other path in V1 (`code_edges` is never populated), and a caller is a
+    *use* of a name, not a second definition of it. `08` §3.2's
+    implementation note documents this as textual, GitHub-code-search-style
+    matching, including non-call occurrences — precision is the caller's
+    job."""
+    hits = await gateway.search_symbol(REPO, "get_rate")
+
+    checkout_hits = {hit.line: hit for hit in hits if hit.path == "services/checkout.py"}
+    # `tax_amount = self.tax_client.get_rate(cart.region)` — the real call.
+    assert checkout_hits[138].kind == "reference"
+
+    quote_call = next(hit for hit in hits if hit.path == "services/quote.py")
+    assert quote_call.kind == "reference"
+
+    # A docstring mention is reported too — real GitHub code search would
+    # return it — and it is exactly the kind of hit the caller must confirm
+    # against a real `ast.Call` node before trusting it.
+    assert any(hit.path == "api/routes/checkout.py" and hit.kind == "reference" for hit in hits)
+
+
 async def test_search_symbol_does_not_match_a_longer_name(gateway: GitHubGateway) -> None:
     """`def calculate_total_v2` must not answer a search for
-    `calculate_total`, or retrieval spends its budget on the wrong function."""
+    `calculate_total`, or retrieval spends its budget on the wrong function.
+    Word-boundary matching applies to reference hits too, not only
+    definitions."""
     hits = await gateway.search_symbol(REPO, "calculate_tot")
     assert hits == []

@@ -716,6 +716,20 @@ If, after admitting priority 1–4, we still hold fewer than 3 distinct files or
 
 `quality.score` feeds directly into the final confidence calculation (S11). Poor retrieval must lower confidence — this is the mechanism that prevents a confident answer built on thin context.
 
+#### Implementation note — strategies A, B, D, E built at T4.3; ranking is T4.4 (added at T4.3)
+
+Four of the five strategies are implemented in `apps/worker/roottrace_worker/pipeline/retrieve/strategies.py`, run via `gather(...)`. Strategy C (vector semantic search) is deferred exactly as this section already specifies — the code path exists (`strategy_c_vector_semantic`) and returns empty, since `code_nodes.embedding` is never populated in V1.
+
+**Strategy B parses with Python's `ast`, not Tree-sitter.** V1's corpus, fixture repository, and sandbox are all Python-only; `ast.parse` is the boring, zero-dependency, first-class way to do what strategy B needs for one language, and Tree-sitter's payoff — uniformity across languages — only starts to matter at V5 (Go/Java/Ruby, `18` §8). Introducing a compiled-grammar dependency now, for a language V1 parses natively already, would be paying that cost years before it earns anything. `apps/worker/roottrace_worker/pipeline/retrieve/ast_index.py`.
+
+**Every path S4 produced is re-verified against the tree before use, never trusted.** `understanding.frames[].repo_path` and `understanding.failure_point.repo_path` are cascade steps 1–2 only (`03` §S4 has no repo access to check them against) — `config-02` is a well-formed path from those steps that is not a real file, and strategy A/B blindly fetching it would silently drop the frame or return nothing rather than finding the real one via T4.2's `resolve_against_tree`.
+
+**`search_symbol`'s contract widened at T4.3 to make "callers" findable at all.** `code_edges` is never populated in V1, so *"found via ... GitHub code search on the symbol name"* is the only path this stage ever takes for callers — and a caller is a *use* of a name, not a second definition of it. `08` §3.2 records the resulting contract: every textual occurrence, including comments and docstrings, classified `"function"`/`"class"`/`"reference"`; precision (confirming a `"reference"` hit is a genuine call, not a stray mention) is the caller's job, done here with an `ast` parse of the candidate file.
+
+**This is the ticket that reaches `clients/tax_client.py`.** T4.1 and T4.2 could name every file a stack trace or a resolved path could point to; neither could reach a file with no frame, no breadcrumb, and no mention in the message. Strategy B's one-hop callee expansion — `calculate_total` calls `get_rate`, `get_rate` is defined in `clients/tax_client.py` — is what closes that gap, proving `03` §S5's premise that call-graph expansion, not frame-direct fetch, is what makes the running example work at all.
+
+**Three corpus cases have a root cause no strategy here can reach**, for three distinct, structural reasons rather than one bug: `regression-02`'s root cause is two hops from the failure point (T4.3 does one, per this section's "1 hop; 2 hops only if budget remains" — there is no budget concept until T4.4); `config-02`'s root cause is the producer of a value injected at composition-root time, reached by no call edge at all; `type-mismatch-03`'s root cause and its failure point are unrelated sibling functions connected only through shared mutable data, never through a call. Recorded and asserted by name in `tests/integration/test_retrieve_strategies_corpus.py::ROOT_CAUSE_UNREACHABLE_BY_T4_3`, so a fourth case joining the set — or one of these three starting to resolve — is a build break, not a silent drift.
+
 ---
 
 ### S6 — `reason`

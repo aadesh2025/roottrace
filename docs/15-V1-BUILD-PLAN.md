@@ -389,6 +389,18 @@ Frame-direct fetch, Tree-sitter call-graph expansion (1 hop), git history (blame
 
 **Accept:** For the running example, retrieval returns `checkout.py`, `tax_client.py`, `routes/checkout.py`, and `test_checkout.py`, plus the introducing commit `8a3f1c2`.
 
+**Done.** `apps/worker/roottrace_worker/pipeline/retrieve/strategies.py`. Verified on the running example (`null-prop-01`): all four named files retrieved, blame commit `8a3f1c2e` found, `clients/tax_client.py` specifically reached only through strategy B's one-hop callee expansion — no frame, breadcrumb, or resolved path names it. Corpus-wide: every retrieved path exists in the repository (`tests/integration/test_retrieve_strategies_corpus.py`), 20 of 23 non-control cases retrieve their own root cause file (the other 3 are named and explained below, not silently absorbed), and no strategy raises on any of the 25 cases including the two controls.
+
+**Uses `ast`, not Tree-sitter**, per the T4.1 agreement extended here — V1 parses one language, and `ast.parse` is the boring, zero-dependency way to do it. See `03` §S5's implementation note.
+
+**Two pre-existing gaps, found while building this ticket and fixed here, not deferred:**
+- `understanding.frames[].repo_path` and `understanding.failure_point.repo_path` were being trusted as-is by strategies A and B — S4's cascade steps 1–2 output, never re-verified against the tree. `config-02` exposed it immediately: strategy A silently dropped the frame, and strategy B returned nothing at all, because both tried to fetch `services/services/export.py`, a well-formed path that isn't a file. Both strategies now call T4.2's `resolve_against_tree` first. This is what T4.2's own note ("S5's fetch loop is where re-verification first happens") anticipated but had not yet been wired to a caller.
+- `FixtureTransport.search_symbol` only ever returned definitions, because that was T3.3's whole requirement at the time. Strategy B's "callers" resolution has no other path in V1 (`code_edges` is unindexed), and a caller is a *use* of a name, not a second definition — the original implementation could never have found one. Broadened to report every occurrence, classified by kind; existing tests (`test_search_symbol_finds_the_definition`, `test_search_symbol_does_not_match_a_longer_name`) pass unchanged since the change is additive. See `08` §3.2's new implementation note.
+
+**Three corpus cases have no reachable root cause under this ticket's four strategies, for three different structural reasons — not one bug repeated three times.** `regression-02` needs 2 hops (this ticket does 1, per spec). `config-02`'s root cause is the producer of a composition-root-injected value, reached by no call edge. `type-mismatch-03`'s root cause and its failure point are sibling functions connected only by shared mutable data, never a call. All three are named explicitly in `tests/integration/test_retrieve_strategies_corpus.py::ROOT_CAUSE_UNREACHABLE_BY_T4_3`, with a paired test asserting they stay unreachable — so either a fourth case joining the set, or one of these three starting to resolve, is a build break rather than a silent drift in either direction.
+
+**Retrieval's coverage floor (`14` §10: fingerprint/retrieval/scoring ≥ 95%) is met** — `pipeline/retrieve` measures 99% (`ast_index.py` and `import_resolution.py` at 100%, `strategies.py` at 97%).
+
 ### T4.4 Ranking, budget, and quality scoring
 
 Relevance formula, priority-ordered eviction, 24k hard budget, quality signals, `insufficient_context` termination.

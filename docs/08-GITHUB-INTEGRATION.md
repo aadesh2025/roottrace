@@ -128,6 +128,12 @@ Steps 1–2 need no repository access and run in S4 (`03` §S4, `03` §8.1: *"S4
 
 `resolve_frame_path`/`resolve_against_tree` take an already-fetched `RepoTree`; the once-per-SHA Redis caching described above is the caller's responsibility (the orchestrator, T8.2), not this function's. Step 4's ambiguous case returns `resolved: null` rather than an arbitrary pick among the candidates — "flag `low_frame_confidence`" is implemented as an honest non-answer, not a guess dressed as one.
 
+#### Implementation note — `search_symbol`'s contract is full-text, not definition-only (added at T4.3)
+
+`§7.2`'s `search_symbol` returns every line where the queried symbol appears as a whole identifier, classified `kind="function"`/`"class"` for a definition and `kind="reference"` for every other occurrence — call sites, attribute access, imports, and comments or docstrings that happen to mention the name. This is deliberately textual, matching what a real GitHub code search actually returns; it is not AST-aware and does not attempt to tell a call site from a stray mention.
+
+The reason: `03` §S5 strategy B's only V1 path to finding a function's *callers* is *"GitHub code search on the symbol name"* — `code_edges` is never populated — and a caller is a *use* of the function's name, never a second definition of it. A definition-only search, which is what `search_symbol` originally returned, could never find one. Precision belongs to the caller of this method, not to the transport: strategy B fetches a `"reference"` hit's file and confirms it with an `ast` parse before trusting it as a real call, exactly as a human skimming code search results would.
+
 ### 3.3 Fetching content
 
 ```python

@@ -5,7 +5,7 @@
 > open, and what to pick up next. Deliberately un-numbered so it is never
 > mistaken for part of the frozen contract set.
 >
-> **Last updated:** 2026-08-17, this commit (T4.2, Phase 7 in progress).
+> **Last updated:** 2026-08-18, this commit (T4.3, Phase 7 in progress).
 > Regenerate this from `docs/15-V1-BUILD-PLAN.md` and `git log` — those are the
 > authorities. If this file and `15` disagree, `15` wins.
 
@@ -13,19 +13,25 @@
 
 ## 1. Where the build is, in one line
 
-**Phases 0–6 of 16 are complete, and Phase 7 (retrieval) has two of four
+**Phases 0–6 of 16 are complete, and Phase 7 (retrieval) has three of four
 tickets closed.** The system can accept a production error over HTTP,
 sanitise it, fingerprint it, group it into an issue, score its severity,
 decide whether it deserves a pipeline run, turn it into a structured
-`ErrorUnderstanding` with a retrieval plan, and — given a fetched repository
-tree — resolve every stack frame in the corpus to the real file it came from,
-**25/25**. **Nothing that fetches code from a live gateway call exists yet.**
-No call-graph expansion, no vector search, no git history, no test discovery,
-no reasoning, no patch, no sandbox, no dashboard.
+`ErrorUnderstanding` with a retrieval plan, resolve every stack frame in the
+corpus to the real file it came from, and — for the running example — assemble
+frame-direct content, a one-hop call graph, git blame/history, and a
+discovered test, reaching `clients/tax_client.py` (a file no frame, breadcrumb,
+plan, or path resolver names) through call-graph expansion alone. **Nothing
+ranks, deduplicates, or budgets that output yet, and nothing reasons about
+it.** No vector search (deferred to V2 by design), no reasoning, no patch, no
+sandbox, no dashboard.
 
-**Next:** T4.3 — Stage 5 retrieval strategies A, B, D, E (frame-direct fetch,
-call-graph expansion, git history, test discovery). `15` §14 still forbids
-advancing past Phase 7 until retrieval is genuinely good on the fixture set.
+**Next:** T4.4 — ranking, the 24,000-token budget, and quality scoring; the
+last ticket of Phase 7. `15` §14 still forbids advancing past Phase 7 until
+retrieval is genuinely good on the fixture set — T4.4 is where the four bars
+`15` §6 states (frame paths, exception family, budget, `insufficient_context`
+termination) become checkable together, and where the coordinator's stated
+hard-stop condition for this phase gets evaluated.
 
 ---
 
@@ -43,7 +49,7 @@ advancing past Phase 7 until retrieval is genuinely good on the fixture set.
 | 4 | FastAPI foundation | T1.5 | ✅ Complete |
 | 5 | Fixture system | T3.1–T3.3 | ✅ Complete |
 | 6 | Ingestion / fingerprinting | T2.1–T2.5 | ⚠️ Complete **except** T2.1's p95 budget and object storage — see §5 |
-| **7** | **Retrieval** | **T4.1–T4.4** | 🔶 **T4.1, T4.2 done; T4.3 next** |
+| **7** | **Retrieval** | **T4.1–T4.4** | 🔶 **T4.1–T4.3 done; T4.4 next (last ticket of the phase)** |
 | 8 | AI reasoning | T5.1–T5.3 | ⬜ Not started |
 | 9 | Patch generation | T5.4 | ⬜ Not started |
 | 10 | Sandbox validation | T6.1–T6.5 | ⬜ Not started |
@@ -54,15 +60,18 @@ advancing past Phase 7 until retrieval is genuinely good on the fixture set.
 | 15 | Evaluation harness | T10.1 | ⬜ Not started |
 | 16 | Dashboard | T8.2–T8.4, T9.1–T9.8 | ⬜ Not started |
 
-**15 tickets closed of 47.** (39 have their own section in `15`; T9.1–T9.8 are
+**16 tickets closed of 47.** (39 have their own section in `15`; T9.1–T9.8 are
 listed as a table in `15` §11.)
 
 Of the 14 pipeline stages in `03`, **S1–S4 exist in full and S5 exists in
-part** (`receive`, `fingerprint`, `triage`, `understand`, plus S5's frame path
-resolution). S5's four fetch strategies (T4.3) and ranking/budget (T4.4) do
-not exist yet. S4's own algorithm has an unfilled seam: the LLM
-structured-extraction step is a Protocol with one implementation
-(`UnavailableExtractor`), pending the gateway at T5.1. See §4.
+large part** (`receive`, `fingerprint`, `triage`, `understand`, plus S5's
+frame path resolution and four of five fetch strategies). What S5 is missing:
+strategy C (vector search, deliberately deferred to V2 — the index is never
+populated in V1) and T4.4's ranking, dedup, 24k-token budget, and quality
+scoring — S5 currently returns raw, unranked, unbudgeted candidates. S4's own
+algorithm has an unfilled seam: the LLM structured-extraction step is a
+Protocol with one implementation (`UnavailableExtractor`), pending the gateway
+at T5.1. See §4.
 
 ---
 
@@ -82,17 +91,69 @@ structured-extraction step is a Protocol with one implementation
 | Python SDK | `init`, `capture_exception`, `add_breadcrumb`, ASGI middleware, batching, retry, buffer, never-raises | 171 unit + 13 integration tests |
 | S4 `understand` | Deterministic pre-parse, exception taxonomy (10 families), path resolution cascade steps 1–2, retrieval-plan construction, LLM extraction seam with hostile-reply-safe merge | `apps/worker/tests/test_understand_*.py` (161), `tests/integration/test_understand_corpus.py` (182) |
 | S5 frame path resolution | Cascade steps 3–4 (suffix match, filename search) against a fetched `RepoTree`, monorepo `root_path`/`service_map` scoping as a hard filter, `test_path_mapping`'s resolution logic as a pure function | `apps/worker/tests/test_retrieve_path_resolution.py` (20), `tests/integration/test_retrieve_path_resolution_corpus.py` (27) — **25/25 corpus frame paths resolve** |
+| S5 retrieval strategies A, B, D, E | Frame-direct fetch with `ast`-based function windowing; one-hop call-graph expansion (callees, callers via confirmed `search_symbol` hits, type definitions, import resolution); git blame/recent-commits/release-diff; convention + symbol-grep test discovery. Strategy C stubbed empty (V1 has no code index) | `apps/worker/tests/test_retrieve_ast_index.py` (28), `test_retrieve_import_resolution.py` (10), `test_retrieve_windowing.py` (8), `test_retrieve_strategies.py` (39), `tests/integration/test_retrieve_strategies_corpus.py` (98) — running example retrieves all 4 named files + the introducing commit; 20/23 non-control cases retrieve their own root cause file, the other 3 named and explained (`15` T4.3) |
 
-**Test totals:** 1,588 collected — 791 `unit`, 797 `integration`; 220 tests also
-carry the `security` marker. Overall unit coverage **91%** against a ratchet
-of **75**; the new `pipeline/understand` and `pipeline/retrieve` packages are
-at 99% and 100% respectively.
+**Test totals:** 1,773 collected — 878 `unit`, 895 `integration`; 220 tests also
+carry the `security` marker. Overall unit coverage **92%** against a ratchet
+of **75**; `pipeline/understand` and `pipeline/retrieve` are at 99% each — both
+clear `14` §10's ≥95% floor for retrieval/fingerprint/scoring code.
 
 ---
 
 ## 4. Decisions taken in this session
 
-This session covers T4.1 and T4.2, the first two tickets of Phase 7.
+This session covers T4.1, T4.2, and T4.3 — the first three of Phase 7's four
+tickets.
+
+### T4.3 — Retrieval strategies A, B, D, E
+
+- **`ast`, not Tree-sitter, per the T4.1 agreement extended here.** Strategy B
+  needs a local symbol table (functions, classes, imports, call sites) for one
+  language; the standard library does that natively, and Tree-sitter's
+  cross-language payoff only starts to matter at V5. `apps/worker/roottrace_worker/pipeline/retrieve/ast_index.py`.
+- **Two pre-existing gaps were found while building this ticket and fixed
+  here, not deferred:**
+  - Strategies A and B were trusting `understanding.frames[].repo_path` and
+    `understanding.failure_point.repo_path` as-is — S4's cascade steps 1–2
+    output, never re-verified against the tree. `config-02` exposed it
+    immediately: both strategies tried to fetch `services/services/export.py`,
+    a well-formed path that isn't a file, and silently returned nothing. Both
+    now call T4.2's `resolve_against_tree` first — the wiring T4.2's own note
+    said would happen "the first place in the real pipeline," now done.
+  - `FixtureTransport.search_symbol` only ever returned *definitions*, which
+    was correct for T3.3's original purpose but left strategy B's "callers"
+    resolution with nothing to call — `code_edges` is unindexed in V1, so
+    "GitHub code search on the symbol name" (`03` §S5) is the *only* V1 path
+    to finding a caller, and a caller is a use of a name, not a second
+    definition. Broadened to report every occurrence, classified by kind
+    (`function`/`class`/`reference`); the two existing contract tests pass
+    unchanged since the change is additive.
+- **A `"reference"` hit is trusted as a real call only once confirmed by a
+  fresh `ast` parse of the candidate file** — a docstring or comment
+  mentioning a function's name produces no `ast.Call` node and is silently
+  dropped. This is what makes the widened `search_symbol` contract safe: the
+  gateway is intentionally as dumb as real GitHub code search, and precision
+  is strategy B's job, not the transport's.
+- **Import resolution is tree-verified, never guessed**, reusing exactly the
+  principle T4.2 established for stack frames: `from services import
+  pricing` is genuinely ambiguous (submodule or package symbol?) from the
+  statement alone, and only checking the fetched tree resolves it.
+  `apps/worker/roottrace_worker/pipeline/retrieve/import_resolution.py`.
+- **Three corpus cases have a root cause no strategy here reaches, for three
+  distinct structural reasons** — not one bug: `regression-02` is 2 hops from
+  its failure point (T4.3 does 1, exactly as `03` §S5 specifies for V1);
+  `config-02`'s root cause is the producer of a composition-root-injected
+  value, reached by no call edge at all; `type-mismatch-03`'s root cause and
+  its failure point are sibling functions connected only through shared
+  mutable data, never a call. Named explicitly in
+  `tests/integration/test_retrieve_strategies_corpus.py::ROOT_CAUSE_UNREACHABLE_BY_T4_3`,
+  with a paired test asserting they *stay* unreachable, so either a fourth
+  case joining the set or one of these three starting to resolve is a build
+  break in either direction, not a silent drift.
+- **`pipeline/retrieve` measures 99% coverage**, clearing `14` §10's ≥95%
+  floor for retrieval code specifically (not just the 75% general ratchet) —
+  checked deliberately, since retrieval is explicitly named in that floor and
+  the general ratchet alone would not have caught falling short of it.
 
 ### T4.2 — Frame path resolution
 
@@ -249,6 +310,8 @@ explicitly rejected — that deletes the only signal.
 | 8 | **The LLM structured-extraction step of S4 is unimplemented** | T4.1 → T5.2 | `StructuredExtractor` is a Protocol with one implementation, `UnavailableExtractor`, which always raises. S4 runs on the deterministic pre-parse alone until T5.2 adds a real implementation. Deliberate — see `15` T4.1 and §4 above, not a gap discovered late. |
 | 9 | **Exception-family accuracy has no margin (23/25, exactly the T4.1 bar)** | T4.1 → T5.2 | `race-01` and `resource-01` are knowable only from breadcrumbs, and the deterministic taxonomy deliberately never reads them (`A1` §9). The extractor at T5.2 is expected to close this; if it does not, the threshold needs revisiting, not the taxonomy. Named explicitly in `tests/integration/test_understand_corpus.py` so a third miss is a build break. |
 | 10 | **`POST /v1/repositories/{id}/test_path_mapping` (`05` §6.6) is not wired as an HTTP endpoint** | T4.2 → Phase 16 or first `repositories`-CRUD ticket | `dry_run_path_mapping` is the full resolution logic as a pure function; the route needs `repositories` CRUD, which no ticket through Phase 7 builds. Deliberate scoping decision, not a gap — see `15` T4.2 and `05` §6.6. |
+| 11 | **Three corpus cases have no reachable root cause under T4.3's four strategies** | T4.3 → T4.4 / T5.x | `regression-02` (2 hops away), `config-02` (root cause is a composition-root-injected value's producer, no call edge), `type-mismatch-03` (root cause and failure point are sibling functions sharing only data, no call edge). Named by case id in `tests/integration/test_retrieve_strategies_corpus.py::ROOT_CAUSE_UNREACHABLE_BY_T4_3`; whether T4.4's budget allowing a second hop, or S6's reasoning-driven follow-up retrieval, closes any of these is an open question for later phases. |
+| 12 | **Release correlation (`03` §S5 strategy D) has no automatic "previous release" lookup** | T4.3 → T8.2 or a `repositories`/releases data source | `strategy_d_git_history`'s `release_diff` is `None` unless the caller supplies `previous_ref` explicitly — the mechanism (`gateway.compare`) is built and tested, but nothing upstream yet knows what the previous release tag was; that needs a releases table or GitHub API call this ticket has no reason to add. |
 
 ---
 
@@ -292,28 +355,36 @@ make fixtures-verify    # ground truth resolved against real code (also in CI)
 
 ## 8. What to continue with
 
-**Phase 7 — retrieval, T4.3 → T4.4, in order. T4.1 and T4.2 are done.** `15`
-§6 has the acceptance criteria; `03` §S4/§S5 has the contracts.
+**Phase 7 — retrieval, T4.4 only. T4.1–T4.3 are done.** `15` §6 has the
+acceptance criteria; `03` §S4/§S5 has the contracts. **This is the last
+ticket of the phase**, and the coordinator's stated hard-stop condition
+applies at its end: do not advance into Phase 8 unless the four bars below
+are genuinely met, measured, not adjusted to fit.
 
 | Ticket | Scope | Status |
 |---|---|---|
 | T4.1 | Stage 4 — `understand` | ✅ Done — `apps/worker/roottrace_worker/pipeline/understand/` |
 | T4.2 | Frame path resolution | ✅ Done — `apps/worker/roottrace_worker/pipeline/retrieve/path_resolution.py`; corpus at 25/25 |
-| T4.3 | Stage 5 — retrieval strategies A, B, D, E | ⬜ Next |
-| T4.4 | Ranking, budget, and quality scoring | ⬜ Not started |
+| T4.3 | Stage 5 — retrieval strategies A, B, D, E | ✅ Done — `apps/worker/roottrace_worker/pipeline/retrieve/strategies.py` |
+| T4.4 | Ranking, budget, and quality scoring | ⬜ Next — last ticket of Phase 7 |
 
-**T4.3 is the first ticket that calls the `GitHubGateway` for real content**,
-not just a tree listing. `resolve_frame_path` (T4.2) is what strategy A
-(frame-direct fetch) should call per frame before `fetch_file`, now that both
-halves of the cascade exist — S4's `must_fetch` list still carries only what
-steps 1–2 produced, not yet re-verified against a tree, so T4.3's fetch loop
-is where that re-verification first happens in the real pipeline rather than
-only in a test. Strategy B (call-graph expansion) is the one to get right
-first: `null-prop-01`'s root cause, `clients/tax_client.py`, is reachable
-only by one hop from `calculate_total`'s callees, and no plan or path
-resolver built so far can name it — that was flagged deliberately in T4.1
-(`tests/integration/test_understand_corpus.py::test_the_root_cause_file_is_reachable_only_by_expansion`)
-as the reason this phase exists.
+**T4.4 turns `RetrievalCandidates` (T4.3's raw, unranked output) into the real
+`ContextBundle`** (`03` §S5's output contract): the relevance formula
+(`strategy_weight × recency_factor × proximity_factor × symbol_overlap`),
+priority-ordered eviction against the 24,000-token hard budget, deduplication
+across strategies (T4.3 deliberately does none — `services/checkout.py` in
+the running example is currently retrieved once by strategy A, but a case
+where strategy B's caller search rediscovers a file strategy A already fetched
+is expected and untested until T4.4 merges them), the `quality.score` that
+feeds S11's confidence, and the `insufficient_context` termination when
+priority 1–4 leaves fewer than 3 files or 800 tokens of `in_app` source. This
+needs a real tokenizer — nothing built through T4.3 counts tokens.
+
+**T4.4's own acceptance bar (`15` §6):** budget never exceeded across all 25
+cases; priority 1–2 items never evicted; both `unfixable-*` controls terminate
+as `insufficient_context` without proceeding to reasoning. Verify these against
+the fixture corpus the same way T4.1–T4.3 did — measured, not assumed — before
+calling Phase 7 closed.
 
 **The rule that governs this phase**, from `CLAUDE.md` and `15` §14:
 
@@ -328,7 +399,10 @@ client**, which is the only way retrieval reaches code. P3 binds here — retrie
 narrowly, never wholesale, inside a hard 24,000-token budget with
 priority-ordered eviction.
 
-Nothing in the open-items list blocks Phase 7. Item 9 (family accuracy with no
-margin) is worth watching once T4.3/T4.4 are in and the corpus can be scored
-end to end — the extractor at T5.2 is the intended fix, not a change to T4.2's
-or T4.3's scope.
+Nothing in the open-items list blocks T4.4. Items 9 and 11 (family accuracy
+with no margin; three root causes unreachable by T4.3's strategies) are worth
+re-checking once T4.4's budget/eviction exists — a second hop becoming
+affordable within budget could close `regression-02` specifically, though not
+`config-02` or `type-mismatch-03`, which have no call edge to walk at any hop
+count. Neither is T4.4's job to fix; both are worth having in view when
+evaluating the phase's hard-stop numbers at the end of this ticket.

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterable, Sequence
 from datetime import datetime
 from pathlib import Path
@@ -282,6 +283,23 @@ class FixtureTransport:
         )
 
     async def search_symbol(self, repo: RepoRef, symbol: str) -> list[SymbolHit]:
+        """Every line where `symbol` appears as a whole identifier —
+        definitions (`kind="function"`/`"class"`) and every other occurrence
+        (`kind="reference"`): call sites, attribute access, imports, and yes,
+        comments and docstrings too, because that is what a real GitHub code
+        search returns (`08` §3.2's implementation note, added at T4.3) — it
+        is textual, not AST-aware. Precision belongs to the caller: S5's
+        call-graph strategy (`03` §S5 strategy B) fetches a hit's file and
+        confirms it with `ast` before trusting a `"reference"` as a real call
+        site (`08` §3.2).
+
+        Broadened from definition-only at T4.3, when strategy B's "callers"
+        resolution — `03` §S5's only V1 path to finding who calls a function,
+        since `code_edges` is never populated — turned out to need it: a
+        caller of `get_rate` is a *use* of the name, not a second definition
+        of it, and the original implementation could never have found one.
+        """
+        pattern = re.compile(rf"\b{re.escape(symbol)}\b")
         hits: list[SymbolHit] = []
         for candidate in self._walk():
             if candidate.suffix != ".py":
@@ -290,11 +308,16 @@ class FixtureTransport:
             for number, line in enumerate(
                 candidate.read_text(encoding="utf-8").splitlines(), start=1
             ):
+                if not pattern.search(line):
+                    continue
                 stripped = line.strip()
-                for keyword, kind in (("def ", "function"), ("class ", "class")):
+                kind = "reference"
+                for keyword, def_kind in (("def ", "function"), ("class ", "class")):
                     prefix = f"{keyword}{symbol}"
                     if stripped.startswith(prefix) and _is_definition(stripped, prefix):
-                        hits.append(SymbolHit(path=relative, line=number, symbol=symbol, kind=kind))
+                        kind = def_kind
+                        break
+                hits.append(SymbolHit(path=relative, line=number, symbol=symbol, kind=kind))
         hits.sort(key=lambda hit: (hit.path, hit.line))
         return hits
 
