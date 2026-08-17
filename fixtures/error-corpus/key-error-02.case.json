@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "27c82a4572f20d896b81bd6ebdd2f246",
     "issue_error_type": "KeyError",
+    "exception_family": "key_index",
+    "frame_repo_paths": [
+      "api/routes/cart.py"
+    ],
     "relevant_files": [
       "api/routes/cart.py"
     ],

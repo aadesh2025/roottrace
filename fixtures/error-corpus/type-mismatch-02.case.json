@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "f0328bf7ede19e066f8a17e203da6be8",
     "issue_error_type": "AttributeError",
+    "exception_family": "key_index",
+    "frame_repo_paths": [
+      "services/inventory.py"
+    ],
     "relevant_files": [
       "clients/inventory_client.py",
       "services/inventory.py"

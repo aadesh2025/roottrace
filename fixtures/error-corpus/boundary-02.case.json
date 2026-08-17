@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "cff65f2bd0bf82b99a692e0d6f1ff558",
     "issue_error_type": "IndexError",
+    "exception_family": "key_index",
+    "frame_repo_paths": [
+      "services/export.py"
+    ],
     "relevant_files": [
       "services/export.py"
     ],

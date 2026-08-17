@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "92451fed1e7f1c217adbfcc493c9d22d",
     "issue_error_type": "ValueError",
+    "exception_family": "concurrency",
+    "frame_repo_paths": [
+      "services/inventory.py"
+    ],
     "relevant_files": [
       "services/inventory.py"
     ],

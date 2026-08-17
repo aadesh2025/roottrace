@@ -947,6 +947,12 @@ source = { editable = "packages/sdk-python" }
 name = "roottrace-worker"
 version = "0.1.0"
 source = { editable = "apps/worker" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.9,<3.0" }]
 
 [[package]]
 name = "ruff"

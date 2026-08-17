@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "1504b7c5742a759091af2d20ed9d4dad",
     "issue_error_type": "ValueError",
+    "exception_family": "type_mismatch",
+    "frame_repo_paths": [
+      "services/cart.py"
+    ],
     "relevant_files": [
       "services/cart.py"
     ],

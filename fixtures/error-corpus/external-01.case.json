@@ -13,6 +13,11 @@
   "expected": {
     "fingerprint": "c8f18dee5b1ee57e613c2a18b4fa19a1",
     "issue_error_type": "UpstreamTimeout",
+    "exception_family": "integration",
+    "frame_repo_paths": [
+      "clients/inventory_client.py",
+      "services/inventory.py"
+    ],
     "relevant_files": [
       "services/inventory.py",
       "clients/inventory_client.py"

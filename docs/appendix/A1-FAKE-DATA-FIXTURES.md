@@ -177,6 +177,8 @@ def estimate_total(self, cart: Cart) -> Decimal:
   "expected": {
     "fingerprint": "a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5",
     "issue_error_type": "TypeError",
+    "exception_family": "null_undefined",
+    "frame_repo_paths": ["services/checkout.py", "api/routes/checkout.py"],
     "relevant_files": ["clients/tax_client.py", "services/checkout.py",
                        "api/routes/checkout.py"],
     "retrieval_quality_min": 0.60,

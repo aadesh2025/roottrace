@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "d54c38ff0698aea52a05cc56d6d49806",
     "issue_error_type": "ValueError",
+    "exception_family": "type_mismatch",
+    "frame_repo_paths": [
+      "services/quote.py"
+    ],
     "relevant_files": [
       "services/quote.py",
       "clients/tax_client.py",

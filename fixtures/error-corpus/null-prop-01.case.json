@@ -13,6 +13,11 @@
   "expected": {
     "fingerprint": "8d6bd2e9143ab05d83885ce913c2a4ad",
     "issue_error_type": "TypeError",
+    "exception_family": "null_undefined",
+    "frame_repo_paths": [
+      "services/checkout.py",
+      "api/routes/checkout.py"
+    ],
     "relevant_files": [
       "clients/tax_client.py",
       "services/checkout.py",

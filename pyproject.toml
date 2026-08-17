@@ -106,6 +106,12 @@ ignore = [
 # name. Renaming for a style rule would put the code and the spec out of step,
 # which is the defect this project treats most seriously.
 "apps/worker/roottrace_worker/github/errors.py" = ["N818"]
+# Same rule, same reasoning, different origin: `ExtractorUnavailable` is named
+# to match `TransportUnavailable` above, because the two are the same idea at
+# two seams — "the thing this stage would have called does not exist here".
+# One of them carrying an `Error` suffix and the other not would make the
+# symmetry look accidental.
+"apps/worker/roottrace_worker/pipeline/understand/extractor.py" = ["N818"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"

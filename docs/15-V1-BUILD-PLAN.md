@@ -357,15 +357,25 @@ The full `GitHubClient` interface, backed by the local fixture tree. Reads retur
 
 ### T4.1 Stage 4 — `understand`
 
-Deterministic pre-parse (frame extraction, in-app classification, path normalisation) + exception taxonomy + LLM structured extraction + post-validation.
+Deterministic pre-parse (frame extraction, in-app classification, path normalisation cascade steps 1–2) + exception taxonomy + LLM structured extraction + post-validation.
 
 **Accept:** All 25 fixture errors produce a valid `ErrorUnderstanding`. Frame paths resolve correctly for ≥ 22/25. Exception family is correct for ≥ 23/25.
+
+**Done.** `apps/worker/roottrace_worker/pipeline/understand/`. Measured on the corpus: 25/25 valid, 24/25 frame paths, 23/25 family — the family criterion at the bar with no margin, see below.
+
+**The LLM structured-extraction step is a Protocol, not yet a call.** `03` §S4's algorithm has an LLM step in the middle, and the gateway that makes it possible (T5.1) and the prompt system (T5.2) are both Phase 8 — after retrieval, which `15` §2 and §14 forbid skipping ahead of. `StructuredExtractor` is the seam; its only V1 implementation, `UnavailableExtractor`, raises immediately and the stage takes the exact fallback `03` §S4 already specifies for LLM exhaustion — deterministic pre-parse, `extraction_confidence: 0.5`, continue, never terminal. T5.2 adds an implementation that calls the gateway with `understand/v3.md`; `stage.py`, `validate.py`, the contracts and the plan are unchanged by that addition. Recorded in `03` §S4 under "Implementation note."
+
+**Two fixture cases are recorded misses, not hidden ones.** `race-01` (lost update) and `resource-01` (unbounded growth) both raise an ordinary exception whose type and message say nothing about concurrency or memory — both are knowable only from breadcrumbs, and the deterministic taxonomy deliberately never reads breadcrumbs (fitting the classifier to this corpus would raise the score and teach the pipeline nothing about the twenty-sixth error, `A1` §9). That leaves the family criterion at **23/25 — the bar exactly, with no slack.** `test_exception_family_is_correct_for_at_least_23_of_25` in `tests/integration/test_understand_corpus.py` asserts the miss set by name, so a third case failing is a build break rather than a threshold silently absorbing it. The extractor at T5.2 is expected to close this gap; if it does not, the threshold itself needs revisiting rather than the taxonomy being taught to pattern-match fixture text.
+
+**`expected.exception_family` and `expected.frame_repo_paths` were added to all 25 case files** to make the second and third acceptance criteria measurable — the corpus previously had no ground truth for either. Both were assigned by reading each error, not derived from the resolver they measure; every path was checked to be a real file in the synthetic repository (`test_the_ground_truth_frame_paths_are_real_files`). Schema updated in `14` §6.2 and `A1` §6 in the same commit.
 
 ### T4.2 Frame path resolution
 
 The four-step cascade with confidence per method, plus the `test_path_mapping` endpoint.
 
 **Accept:** All four cascade steps are individually exercised and return the documented confidence. Monorepo `root_path` and `service_map` resolution works.
+
+**Cascade steps 1–2 already exist**, built at T4.1 in `understand/frames.py` because `03` §8.1 forbids S4 having repo access and the algorithm's own failure-mode row sends the unresolved case to S5's tree search. T4.2 is steps 3–4 (suffix match against the fetched tree, filename search) plus the endpoint. `config-02` is the corpus case waiting for it: `/workspace/services/services/export.py` strips to a well-formed path that is not a real file, and nothing available to S4 can tell — T4.2 is what corrects it.
 
 ### T4.3 Stage 5 — retrieval strategies A, B, D, E
 

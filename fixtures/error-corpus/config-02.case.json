@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "5c76afd813258f9b7290b5d42b4602b8",
     "issue_error_type": "TypeError",
+    "exception_family": "null_undefined",
+    "frame_repo_paths": [
+      "services/export.py"
+    ],
     "relevant_files": [
       "config/settings.py",
       "services/export.py"

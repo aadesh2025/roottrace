@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "06d820461d2ae95a6ce11947f77e7142",
     "issue_error_type": "IndexError",
+    "exception_family": "key_index",
+    "frame_repo_paths": [
+      "api/routes/cart.py"
+    ],
     "relevant_files": [
       "services/cart.py",
       "api/routes/cart.py"

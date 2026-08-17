@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "731d203e2a47c973c63f4a263e64e6d2",
     "issue_error_type": "KeyError",
+    "exception_family": "key_index",
+    "frame_repo_paths": [
+      "config/regions.py"
+    ],
     "relevant_files": [
       "config/regions.py",
       "services/checkout.py"

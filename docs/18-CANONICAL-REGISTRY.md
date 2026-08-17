@@ -115,7 +115,7 @@ L1 network · L2 filesystem · L3 identity · L4 syscall · L5 resources · L6 t
 
 By scope: 3 organization-scoped, 22 project-scoped, 1 dual-scope (`audit_log`).
 
-**Migrations: 15**, listed in `04` §15. `…000900_auth_helpers.sql` must precede `…001000_rls_policies.sql`; `…001500_rls_assertions.sql` runs **last**.
+**Migrations: 17**, listed in `04` §15. Grew from 15 at T2.1, which added `…001600_ingest_role.sql` for the S1 write path (`03` §S1, ADR-009 Option B). `…000900_auth_helpers.sql` must precede `…001000_rls_policies.sql`; `…001500_rls_assertions.sql` runs last among migrations that own a tenant relation — `…001600_ingest_role.sql` grants role privileges only and is exempt from that ordering (`04` §15).
 
 **Partitions are separate relations and inherit nothing.** Each carries its own forced RLS and its own copy of the parent's policies, applied by `rt_admin.secure_partition()` at creation. The 26 count is *logical tables*; the true count of RLS-protected relations is 26 + one per live partition, and grows monthly. See `04` §12.10 (B13).
 

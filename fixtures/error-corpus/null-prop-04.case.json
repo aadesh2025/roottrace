@@ -13,6 +13,11 @@
   "expected": {
     "fingerprint": "41e91fc2753070bc0d071ee0aa3641b6",
     "issue_error_type": "AttributeError",
+    "exception_family": "null_undefined",
+    "frame_repo_paths": [
+      "services/checkout.py",
+      "services/checkout.py"
+    ],
     "relevant_files": [
       "services/checkout.py",
       "models/user.py",

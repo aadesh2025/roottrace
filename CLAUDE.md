@@ -83,7 +83,7 @@ Finish a ticket's acceptance criteria before starting the next. If you think a s
 | Sandbox | Hardened Docker (+gVisor in prod) |
 | Testing | pytest · Playwright · testcontainers |
 
-Do not introduce a new dependency, service, or pattern without saying why and getting agreement. Check `A4-ADR-LOG.md` first — eight major decisions are already made and reasoned.
+Do not introduce a new dependency, service, or pattern without saying why and getting agreement. Check `A4-ADR-LOG.md` first — twelve major decisions are already made and reasoned.
 
 ---
 

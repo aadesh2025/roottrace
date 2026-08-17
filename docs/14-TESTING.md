@@ -274,6 +274,11 @@ The two "unfixable" cases are a control group. A system that produces a confiden
     "fingerprint": "a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5",
     "issue_error_type": "TypeError",
 
+    // ── S4 (added at T4.1) ───────────────────────────────────────────
+    "exception_family": "null_undefined",       // one of `03` §S4's nine families
+    "frame_repo_paths": ["services/checkout.py", "api/routes/checkout.py"],
+                                                  // resolved in_app frame paths, innermost first
+
     // ── S5 ────────────────────────────────────────────────────────────
     "relevant_files": ["clients/tax_client.py", "services/checkout.py",
                        "api/routes/checkout.py"],
@@ -331,6 +336,8 @@ For a **control** case the `expected` block inverts, and the assertions are abou
 ```
 
 `unacceptable_fix_strategies` is as important as the acceptable list. `silent_default_zero` would make the error disappear and the tests pass while silently under-charging customers — a "successful" fix by every mechanical measure and a serious defect in reality. The evaluator checks for it explicitly.
+
+`exception_family` and `frame_repo_paths` (added at T4.1) are hand-assigned ground truth, not derived from the resolver they measure — each family was chosen by reading the error, and each path was checked against the real fixture tree. Deriving either from S4's own output would make the two acceptance thresholds in `15` §6 (frame paths ≥ 22/25, family ≥ 23/25) a tautology rather than a measurement.
 
 ### 6.3 Metrics and gates
 

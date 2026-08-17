@@ -1488,10 +1488,11 @@ infra/supabase/migrations/
 ├─ 20260801001200_partition_security.sql    ← rt_admin.secure_partition + ensure_partitions (§12.10)
 ├─ 20260801001300_materialized_views.sql    ← views + REVOKE + accessors (§13)
 ├─ 20260801001400_partition_maintenance.sql ← CREATES the first partitions, then schedules ensure_partitions()
-└─ 20260801001500_rls_assertions.sql        ← both coverage assertions (§12.9), LAST
+├─ 20260801001500_rls_assertions.sql        ← both coverage assertions (§12.9), LAST-but-one
+└─ 20260801001600_ingest_role.sql           ← rt_ingest role for the S1 write path (T2.1)
 ```
 
-**15 migrations. Ordering is load-bearing:**
+**17 migrations.** The count grew by two after this document was written: `18` §9 records the repair, and `18` §6 is the canonical count — check there before restating it. Ordering is load-bearing:
 
 | Constraint | Why |
 |---|---|
@@ -1499,9 +1500,9 @@ infra/supabase/migrations/
 | `partition_security` before `partition_maintenance` | `ensure_partitions()` is defined there and called there |
 | **No partition is created before `partition_maintenance`** | A partition's policies reference `rt_auth.*` (`…000900`) and are applied by `secure_partition()` (`…001200`). Creating one in `…000400`, as this document originally did, would make migration 5 depend on migrations 10 and 13 — and would be a second creation path, never exercised again, which is exactly where B13 reopens |
 | `materialized_views` after `auth_helpers` | Accessors call `rt_auth.project_ids()` |
-| **`rls_assertions` LAST** | It is the gate. Running it earlier would fire on tables that are legitimately not yet secured |
+| **`rls_assertions` before any migration that adds no new tenant relation** | It is the gate: running it before every table-owning migration would fire on tables not yet secured. `…001600_ingest_role` runs after it and is exempt from the ordering, not from the gate — it grants privileges on `raw_events`, an already-asserted table, and creates no relation for the assertion to have missed |
 
-Placing the assertions in their own final migration is deliberate: they assert the *finished* state, so any migration that adds a relation without securing it fails the run — including migrations written months from now by someone who has never read this file.
+Placing the assertions in their own migration, run once every table-owning migration has applied, is deliberate: they assert the *finished* tenant-table state, so any migration that adds a relation without securing it fails the run — including migrations written months from now by someone who has never read this file. A migration that only grants role privileges, like `ingest_role`, is free to follow it.
 
 Rules:
 

@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "20bd9c58a048e1731cbeadb3895ddaf3",
     "issue_error_type": "TypeError",
+    "exception_family": "type_mismatch",
+    "frame_repo_paths": [
+      "services/pricing.py"
+    ],
     "relevant_files": [
       "models/config.py",
       "services/pricing.py"

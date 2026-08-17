@@ -5,7 +5,7 @@
 > open, and what to pick up next. Deliberately un-numbered so it is never
 > mistaken for part of the frozen contract set.
 >
-> **Last updated:** 2026-08-17, at commit `9dd46af` (T2.5, Phase 6 closed).
+> **Last updated:** 2026-08-17, this commit (T4.1, Phase 7 in progress).
 > Regenerate this from `docs/15-V1-BUILD-PLAN.md` and `git log` — those are the
 > authorities. If this file and `15` disagree, `15` wins.
 
@@ -13,15 +13,18 @@
 
 ## 1. Where the build is, in one line
 
-**Phases 0–6 of 16 are complete.** The system can accept a production error over
-HTTP, sanitise it, fingerprint it, group it into an issue, score its severity,
-and decide whether it deserves a pipeline run — and it has a Python SDK that
-sends those errors from a customer's application. **Nothing downstream of
-ingestion exists yet.** No retrieval, no reasoning, no patch, no sandbox, no
-dashboard.
+**Phases 0–6 of 16 are complete, and Phase 7 (retrieval) has its first ticket
+closed.** The system can accept a production error over HTTP, sanitise it,
+fingerprint it, group it into an issue, score its severity, decide whether it
+deserves a pipeline run, and now turn it into a structured `ErrorUnderstanding`
+with a retrieval plan — deterministically, with an LLM seam that has nothing
+plugged into it yet. **Nothing that fetches code exists yet.** No call-graph
+expansion, no vector search, no git history, no test discovery, no reasoning,
+no patch, no sandbox, no dashboard.
 
-**Next:** Phase 7 — retrieval (T4.1–T4.4). The build plan singles it out as the
-one that must not be rushed.
+**Next:** T4.2 — frame path resolution, cascade steps 3–4 on the S5 side. `15`
+§14 still forbids advancing past Phase 7 until retrieval is genuinely good on
+the fixture set.
 
 ---
 
@@ -39,7 +42,7 @@ one that must not be rushed.
 | 4 | FastAPI foundation | T1.5 | ✅ Complete |
 | 5 | Fixture system | T3.1–T3.3 | ✅ Complete |
 | 6 | Ingestion / fingerprinting | T2.1–T2.5 | ⚠️ Complete **except** T2.1's p95 budget and object storage — see §5 |
-| **7** | **Retrieval** | **T4.1–T4.4** | ⬜ **Not started — next** |
+| **7** | **Retrieval** | **T4.1–T4.4** | 🔶 **T4.1 done; T4.2 next** |
 | 8 | AI reasoning | T5.1–T5.3 | ⬜ Not started |
 | 9 | Patch generation | T5.4 | ⬜ Not started |
 | 10 | Sandbox validation | T6.1–T6.5 | ⬜ Not started |
@@ -50,11 +53,14 @@ one that must not be rushed.
 | 15 | Evaluation harness | T10.1 | ⬜ Not started |
 | 16 | Dashboard | T8.2–T8.4, T9.1–T9.8 | ⬜ Not started |
 
-**13 tickets closed of 47.** (39 have their own section in `15`; T9.1–T9.8 are
+**14 tickets closed of 47.** (39 have their own section in `15`; T9.1–T9.8 are
 listed as a table in `15` §11.)
 
-Of the 14 pipeline stages in `03`, **stages S1–S3 exist** (`receive`,
-`fingerprint`, `triage`). S4 onward do not.
+Of the 14 pipeline stages in `03`, **stages S1–S4 exist** (`receive`,
+`fingerprint`, `triage`, `understand`). S5 onward do not — and S4's own
+algorithm has an unfilled seam: the LLM structured-extraction step is a
+Protocol with one implementation (`UnavailableExtractor`), pending the gateway
+at T5.1. See §4.
 
 ---
 
@@ -72,15 +78,62 @@ Of the 14 pipeline stages in `03`, **stages S1–S3 exist** (`receive`,
 | Fingerprint + issues | Message normalisation, in-app frame extraction, single-statement atomic upsert | `test_issue_upsert.py` (7), incl. 100 concurrent identical inserts |
 | Triage | Severity scoring, six gate reasons | `apps/api/tests/test_triage.py` (34) |
 | Python SDK | `init`, `capture_exception`, `add_breadcrumb`, ASGI middleware, batching, retry, buffer, never-raises | 171 unit + 13 integration tests |
+| S4 `understand` | Deterministic pre-parse, exception taxonomy (10 families), path resolution cascade steps 1–2, retrieval-plan construction, LLM extraction seam with hostile-reply-safe merge | `apps/worker/tests/test_understand_*.py` (161), `tests/integration/test_understand_corpus.py` (182) |
 
-**Test totals:** 1,164 collected — 576 `unit`, 220 `security`, the rest
-`integration`. Overall coverage **88%** against a ratchet of **75**.
+**Test totals:** 1,541 collected — 771 `unit`, 770 `integration`; 220 tests also
+carry the `security` marker (66 of those within `unit`, 154 within
+`integration`). Overall unit coverage **90%** against a ratchet of **75**; the
+new `pipeline/understand` package alone is at **99%**.
 
 ---
 
 ## 4. Decisions taken in this session
 
-Fifteen commits, `5c863bc` → `9dd46af`. The decisions worth carrying forward:
+This session is T4.1 — S4 `understand`, the first ticket of Phase 7. Its
+decisions:
+
+### T4.1 — S4 `understand`
+
+- **The LLM structured-extraction step is a Protocol, not a call, in V1's
+  first cut.** `03` §S4's algorithm has three steps and the middle one needs
+  the LLM gateway (T5.1) and prompt system (T5.2), both Phase 8 — after
+  retrieval, which `15` §2 and §14 forbid skipping ahead of. `StructuredExtractor`
+  is the seam; `UnavailableExtractor` is its only V1 implementation and raises
+  immediately, taking the exact fallback `03` §S4 already specifies for LLM
+  exhaustion (deterministic pre-parse, `extraction_confidence: 0.5`, continue,
+  never terminal) on the first call rather than the third. T5.2 adds a second
+  implementation; nothing else in the stage changes. User-approved before
+  building — the alternatives considered were pulling T5.1/T5.2 forward
+  (rejected: delays retrieval by a full phase) and calling a model directly
+  from S4 with no gateway (rejected: writes no `llm_calls` row, violates the
+  S4 observability contract).
+- **The four-step frame-path cascade (`08` §3.2) splits across two stages.**
+  `03` §8.1 already states the boundary — S4 has no repo access and produces
+  a plan — and the failure-mode table already sends the unresolved case to
+  S5. T4.1 implements steps 1–2 (configured mappings, heuristic prefixes);
+  T4.2 owns steps 3–4 (tree suffix match, filename search).
+- **The extractor merge is one-directional.** A reply may add to the
+  deterministic plan, lower a frame's path confidence, or replace the
+  exception family — never remove a file the frames prove was executing,
+  raise a confidence the cascade did not earn, invent a frame, or contradict
+  runtime metadata. Every dropped claim is recorded, so a degrading
+  extractor becomes visible rather than a silently worsening plan. This is
+  what makes `03` §S4's "never terminal" fallback safe to build on: a hostile
+  or hallucinating extractor can only leave the deterministic floor intact.
+- **`classify()` never reads breadcrumbs**, on purpose, even though two
+  fixture cases (`race-01`, `resource-01`) are knowable only from them.
+  Reading breadcrumbs would fit the classifier to this corpus and improve
+  nothing on the next error a customer actually sends (`A1` §9). It costs the
+  family-accuracy criterion its margin — 23/25, the bar exactly — and that is
+  recorded as a known, intentional gap rather than closed by teaching the
+  taxonomy to pattern-match fixture text.
+- **`expected.exception_family` and `expected.frame_repo_paths` were added
+  to all 25 fixture case files.** Two of T4.1's three acceptance criteria
+  (`15` §6) had no ground truth to measure against before this. Both were
+  assigned by reading each error, not derived from the resolver being
+  measured, and every path was checked against the real synthetic repository.
+
+### Prior session — T1.1–T2.5 (Phases 1–6)
 
 ### Architecture
 
@@ -159,6 +212,8 @@ explicitly rejected — that deletes the only signal.
 | 5 | **Fixture tree has one revision on disk** | T3.3 | `ref` is resolved, validated and recorded but does not select content. `blame` and `compare` do distinguish revisions. Nothing in V1 reads a historical ref. |
 | 6 | **Fixture suite verified against stock `python:3.12-slim`, not the hardened image** | T3.1 → T6.1 | Checked with `--network none`, which is the property T6.1 would otherwise inherit as a surprise. Re-verify at T6.1. |
 | 7 | **`replay` and `live` transports raise `TransportUnavailable`** | V2 | Deliberate. They are listed and skipped in the contract suite rather than omitted — an omitted transport is one nobody remembers to add. |
+| 8 | **The LLM structured-extraction step of S4 is unimplemented** | T4.1 → T5.2 | `StructuredExtractor` is a Protocol with one implementation, `UnavailableExtractor`, which always raises. S4 runs on the deterministic pre-parse alone until T5.2 adds a real implementation. Deliberate — see `15` T4.1 and §4 above, not a gap discovered late. |
+| 9 | **Exception-family accuracy has no margin (23/25, exactly the T4.1 bar)** | T4.1 → T5.2 | `race-01` and `resource-01` are knowable only from breadcrumbs, and the deterministic taxonomy deliberately never reads them (`A1` §9). The extractor at T5.2 is expected to close this; if it does not, the threshold needs revisiting, not the taxonomy. Named explicitly in `tests/integration/test_understand_corpus.py` so a third miss is a build break. |
 
 ---
 
@@ -166,9 +221,9 @@ explicitly rejected — that deletes the only signal.
 
 Small, and recorded rather than silently fixed:
 
-- `docs/00-README.md` and `CLAUDE.md` both describe `A4-ADR-LOG.md` as holding
-  **eight** decisions. It holds **twelve** (ADR-001 … ADR-012), and has since
-  the specification baseline. `CLAUDE.md` is yours, so it is untouched.
+- None currently tracked. The two entries previously here — the ADR-LOG count
+  in `CLAUDE.md`/`00`, and the 15-vs-17 migration count in `18` §6/`04` §15 —
+  were both corrected this session.
 
 ---
 
@@ -183,8 +238,10 @@ Small, and recorded rather than silently fixed:
   on the machine.
 - Redis runs on **6380**, not 6379 — binding the default would risk pointing the
   suite at an unrelated project's Redis, which the idempotency tests flush.
-- CI is authoritative for the DB-backed integration suite and is green on
-  `9dd46af` across all three jobs.
+- CI is authoritative for the DB-backed integration suite. `test_understand_corpus.py`
+  needs no database — it is marked `integration` only to sit with the other
+  corpus tests that read the same fixture files, and runs the same in CI or
+  locally.
 
 ### Commands
 
@@ -200,15 +257,26 @@ make fixtures-verify    # ground truth resolved against real code (also in CI)
 
 ## 8. What to continue with
 
-**Phase 7 — retrieval, T4.1 → T4.4, in order.** `15` §6 has the acceptance
-criteria; `03` §S4/§S5 has the contracts.
+**Phase 7 — retrieval, T4.2 → T4.4, in order. T4.1 is done.** `15` §6 has the
+acceptance criteria; `03` §S4/§S5 has the contracts.
 
-| Ticket | Scope |
-|---|---|
-| T4.1 | Stage 4 — `understand` |
-| T4.2 | Frame path resolution |
-| T4.3 | Stage 5 — retrieval strategies A, B, D, E |
-| T4.4 | Ranking, budget, and quality scoring |
+| Ticket | Scope | Status |
+|---|---|---|
+| T4.1 | Stage 4 — `understand` | ✅ Done — `apps/worker/roottrace_worker/pipeline/understand/` |
+| T4.2 | Frame path resolution | ⬜ Next — cascade steps 3–4 (`08` §3.2), plus `test_path_mapping` |
+| T4.3 | Stage 5 — retrieval strategies A, B, D, E | ⬜ Not started |
+| T4.4 | Ranking, budget, and quality scoring | ⬜ Not started |
+
+**T4.2 starts from `understand/frames.py`'s `resolve_path`**, which already
+does steps 1–2 and returns `repo_path=None` at confidence 0.3 when they miss —
+that is the exact signal T4.2's tree search is meant to catch. `config-02` is
+the corpus case waiting on it: `/workspace/services/services/export.py` strips
+to `services/services/export.py`, which is not a real file, and T4.2's suffix
+match against the fetched tree is what should find `services/export.py`
+instead. Fixing that one case is what would move T4.1's frame-path score from
+24/25 to 25/25 — worth re-running `tests/integration/test_understand_corpus.py`
+after T4.2 lands, since its miss-set assertions are written to fail loudly if
+that happens.
 
 **The rule that governs this phase**, from `CLAUDE.md` and `15` §14:
 
@@ -223,4 +291,7 @@ client**, which is the only way retrieval reaches code. P3 binds here — retrie
 narrowly, never wholesale, inside a hard 24,000-token budget with
 priority-ordered eviction.
 
-Nothing in the open-items list blocks Phase 7.
+Nothing in the open-items list blocks Phase 7. Item 9 (family accuracy with no
+margin) is worth watching once T4.3/T4.4 are in and the corpus can be scored
+end to end — the extractor at T5.2 is the intended fix, not a change to T4.2's
+or T4.3's scope.

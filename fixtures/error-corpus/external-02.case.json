@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "783da2da928d8c9f19f2377d8c6ec17e",
     "issue_error_type": "RateLimited",
+    "exception_family": "integration",
+    "frame_repo_paths": [
+      "clients/payment_client.py"
+    ],
     "relevant_files": [
       "clients/payment_client.py",
       "services/checkout.py"

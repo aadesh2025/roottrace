@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "dfc4c3e0f2082b3f7fc8e9c3b7f5221e",
     "issue_error_type": "TypeError",
+    "exception_family": "null_undefined",
+    "frame_repo_paths": [
+      "services/pricing.py"
+    ],
     "relevant_files": [
       "config/settings.py",
       "services/pricing.py"

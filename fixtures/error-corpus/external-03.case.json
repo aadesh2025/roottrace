@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "c7e87b795001f2b82b52482f17195f8e",
     "issue_error_type": "UpstreamUnavailable",
+    "exception_family": "integration",
+    "frame_repo_paths": [
+      "clients/inventory_client.py"
+    ],
     "relevant_files": [
       "clients/inventory_client.py",
       "services/inventory.py"

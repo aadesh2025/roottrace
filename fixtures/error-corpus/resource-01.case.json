@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "6454bbe7e601017e4b11fd8167360ff7",
     "issue_error_type": "ValueError",
+    "exception_family": "resource",
+    "frame_repo_paths": [
+      "services/export.py"
+    ],
     "relevant_files": [
       "services/export.py",
       "api/routes/export.py"

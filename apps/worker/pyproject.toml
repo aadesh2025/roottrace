@@ -4,7 +4,13 @@ version = "0.1.0"
 description = "RootTrace AI — ARQ pipeline workers. Runs as service_role; all queries go through TenantRepository."
 requires-python = ">=3.12,<3.13"
 # Runtime dependencies (arq, supabase) arrive with the stages that need them.
-dependencies = []
+#
+# pydantic arrives with S4 (T4.1). `03` §1 R4 makes every stage boundary a
+# validated Pydantic model, and `A2` §1 requires the JSON schema shown to the
+# model and the validator that checks its reply to be the same object — which
+# a hand-rolled validator cannot be. Already a transitive dependency of `api`
+# via FastAPI, so this pins it rather than introducing it.
+dependencies = ["pydantic>=2.9,<3.0"]
 
 [build-system]
 requires = ["hatchling"]

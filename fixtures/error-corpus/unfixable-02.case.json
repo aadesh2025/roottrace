@@ -11,6 +11,10 @@
   "bug_description": "The cluster DNS resolver failed to resolve the inventory service. InventoryClient.ping already wraps the transport failure in a typed, named error; this is an infrastructure fault and no change to this repository fixes it.",
   "api_event": "fixtures/error-corpus/unfixable-02.json",
   "expected": {
+    "exception_family": "integration",
+    "frame_repo_paths": [
+      "clients/inventory_client.py"
+    ],
     "fingerprint": "5ba47e0e410eef70a8d27e0aa56e11a9",
     "relevant_files": [
       "clients/inventory_client.py"

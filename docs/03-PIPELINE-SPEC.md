@@ -529,9 +529,12 @@ The losing occurrence is **not** an error. It attaches to the winner exactly as 
   },
 
   "notes": "The breadcrumb showing a 503 from tax-service immediately before the failure is the strongest available signal; prioritise retrieving the tax client's error handling.",
-  "extraction_confidence": 0.91
+  "extraction_confidence": 0.91,
+  "flags": []
 }
 ```
+
+`flags` (added at T4.1) is where the failure-mode table below becomes machine-readable rather than only prose: `low_frame_confidence`, `no_in_app_frames`, `no_stack_trace`, `deterministic_only`, and `suspicious_content_detected` (`A2` §2 rule 5 — instruction-shaped text found in untrusted input, recorded and never obeyed). The dashboard reads this list directly instead of re-deriving it from the rest of the object.
 
 #### Failure modes
 
@@ -541,6 +544,12 @@ The losing occurrence is **not** an error. It attaches to the winner exactly as 
 | Path mapping produces no plausible repo path | Set frame `confidence: 0.3`; S5 falls back to filename search across the tree |
 | LLM returns invalid JSON twice | Fall back to deterministic pre-parse only, `extraction_confidence: 0.5`, continue |
 | Stack trace absent entirely | Semantic-only retrieval path; flag prominently in the UI |
+
+#### Implementation note — the algorithm spans two stages, not one (added at T4.1)
+
+Step 2 above is the LLM structured-extraction call, and it depends on the LLM gateway (T5.1) and the prompt system (T5.2), both Phase 8. Phase 7 (retrieval) is built and must be validated first (`15` §2, §14) — so T4.1 implements steps 1 and 3 as a permanent, standalone pass and step 2 behind a `StructuredExtractor` seam whose only V1 implementation reports itself unavailable. This is not a placeholder standing in for missing behaviour: it is the literal failure-mode row above — *"LLM returns invalid JSON twice → fall back to deterministic pre-parse only, `extraction_confidence: 0.5`, continue"* — taken deliberately rather than only on exhaustion. T5.2 adds an implementation that calls the gateway with `understand/v3.md`; nothing else in the stage changes.
+
+The same reasoning splits the frame-path cascade in `08` §3.2 across two stages. §8.1 already states the boundary — *"S4 fetching a file to 'check' a path" is a boundary violation; S4 has no repo access by design; it produces a plan"* — and this table's own second row says where the unresolved case goes: S5's tree search. T4.1 therefore implements cascade steps 1–2 (configured mappings, heuristic prefix stripping) here; steps 3–4 (suffix match against the fetched tree, filename search) are T4.2's, on the S5 side.
 
 ---
 

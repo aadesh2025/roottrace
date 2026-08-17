@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "ca69cd65198beda018b0b8dd39a77a5d",
     "issue_error_type": "KeyError",
+    "exception_family": "key_index",
+    "frame_repo_paths": [
+      "api/routes/webhooks.py"
+    ],
     "relevant_files": [
       "api/routes/webhooks.py"
     ],

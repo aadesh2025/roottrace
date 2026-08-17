@@ -13,6 +13,10 @@
   "expected": {
     "fingerprint": "eaedd8589f6b61fc13a4e5c641de969b",
     "issue_error_type": "TypeError",
+    "exception_family": "type_mismatch",
+    "frame_repo_paths": [
+      "services/checkout.py"
+    ],
     "relevant_files": [
       "services/pricing.py",
       "services/checkout.py"
