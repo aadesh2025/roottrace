@@ -18,7 +18,7 @@
 | DevOps / SRE | `13`, `12`, `11` | `07` |
 | Security reviewer | `11`, `07`, `04` (RLS section) | `08` |
 | Founder / PM | `01`, `16` | `15` |
-| Anyone building V1 today | **`15`** | everything it references |
+| Anyone building V1 today | **`PROJECT-STATUS.md`**, then **`15`** | everything `15` references |
 
 ---
 
@@ -47,6 +47,7 @@
 | 16 | `16-ROADMAP.md` | V2–V6. AI chat, multi-model, learning loop, team features, marketplace. |
 | 17 | `17-GLOSSARY.md` | Terminology and canonical error-code registry. |
 | 18 | `18-CANONICAL-REGISTRY.md` | **Single source of truth for every duplicated value.** Gate count, stage timings, table counts, roadmap versions, fixture values. Plus the Phase 0 repair log. Check it before restating any number. |
+| — | `PROJECT-STATUS.md` | **Not a specification — a snapshot.** Which phases are done, what is open, what to pick up next. Un-numbered on purpose. If it disagrees with `15`, `15` wins. |
 
 ### Appendices
 
@@ -55,7 +56,7 @@
 | A1 | `appendix/A1-FAKE-DATA-FIXTURES.md` | The synthetic repository, synthetic error corpus, and expected outputs used to prove V1. |
 | A2 | `appendix/A2-PROMPT-LIBRARY.md` | Every production prompt, verbatim, with output schemas and versioning rules. |
 | A3 | `appendix/A3-CONFIGURATION.md` | Every environment variable, feature flag, and per-project setting. |
-| A4 | `appendix/A4-ADR-LOG.md` | Architecture Decision Records — the eight decisions that shape this system and why. |
+| A4 | `appendix/A4-ADR-LOG.md` | Architecture Decision Records — the twelve decisions that shape this system and why. |
 
 ---
 
