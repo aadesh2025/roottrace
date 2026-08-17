@@ -5,7 +5,7 @@
 > open, and what to pick up next. Deliberately un-numbered so it is never
 > mistaken for part of the frozen contract set.
 >
-> **Last updated:** 2026-08-17, this commit (T4.1, Phase 7 in progress).
+> **Last updated:** 2026-08-17, this commit (T4.2, Phase 7 in progress).
 > Regenerate this from `docs/15-V1-BUILD-PLAN.md` and `git log` — those are the
 > authorities. If this file and `15` disagree, `15` wins.
 
@@ -13,18 +13,19 @@
 
 ## 1. Where the build is, in one line
 
-**Phases 0–6 of 16 are complete, and Phase 7 (retrieval) has its first ticket
-closed.** The system can accept a production error over HTTP, sanitise it,
-fingerprint it, group it into an issue, score its severity, decide whether it
-deserves a pipeline run, and now turn it into a structured `ErrorUnderstanding`
-with a retrieval plan — deterministically, with an LLM seam that has nothing
-plugged into it yet. **Nothing that fetches code exists yet.** No call-graph
-expansion, no vector search, no git history, no test discovery, no reasoning,
-no patch, no sandbox, no dashboard.
+**Phases 0–6 of 16 are complete, and Phase 7 (retrieval) has two of four
+tickets closed.** The system can accept a production error over HTTP,
+sanitise it, fingerprint it, group it into an issue, score its severity,
+decide whether it deserves a pipeline run, turn it into a structured
+`ErrorUnderstanding` with a retrieval plan, and — given a fetched repository
+tree — resolve every stack frame in the corpus to the real file it came from,
+**25/25**. **Nothing that fetches code from a live gateway call exists yet.**
+No call-graph expansion, no vector search, no git history, no test discovery,
+no reasoning, no patch, no sandbox, no dashboard.
 
-**Next:** T4.2 — frame path resolution, cascade steps 3–4 on the S5 side. `15`
-§14 still forbids advancing past Phase 7 until retrieval is genuinely good on
-the fixture set.
+**Next:** T4.3 — Stage 5 retrieval strategies A, B, D, E (frame-direct fetch,
+call-graph expansion, git history, test discovery). `15` §14 still forbids
+advancing past Phase 7 until retrieval is genuinely good on the fixture set.
 
 ---
 
@@ -42,7 +43,7 @@ the fixture set.
 | 4 | FastAPI foundation | T1.5 | ✅ Complete |
 | 5 | Fixture system | T3.1–T3.3 | ✅ Complete |
 | 6 | Ingestion / fingerprinting | T2.1–T2.5 | ⚠️ Complete **except** T2.1's p95 budget and object storage — see §5 |
-| **7** | **Retrieval** | **T4.1–T4.4** | 🔶 **T4.1 done; T4.2 next** |
+| **7** | **Retrieval** | **T4.1–T4.4** | 🔶 **T4.1, T4.2 done; T4.3 next** |
 | 8 | AI reasoning | T5.1–T5.3 | ⬜ Not started |
 | 9 | Patch generation | T5.4 | ⬜ Not started |
 | 10 | Sandbox validation | T6.1–T6.5 | ⬜ Not started |
@@ -53,14 +54,15 @@ the fixture set.
 | 15 | Evaluation harness | T10.1 | ⬜ Not started |
 | 16 | Dashboard | T8.2–T8.4, T9.1–T9.8 | ⬜ Not started |
 
-**14 tickets closed of 47.** (39 have their own section in `15`; T9.1–T9.8 are
+**15 tickets closed of 47.** (39 have their own section in `15`; T9.1–T9.8 are
 listed as a table in `15` §11.)
 
-Of the 14 pipeline stages in `03`, **stages S1–S4 exist** (`receive`,
-`fingerprint`, `triage`, `understand`). S5 onward do not — and S4's own
-algorithm has an unfilled seam: the LLM structured-extraction step is a
-Protocol with one implementation (`UnavailableExtractor`), pending the gateway
-at T5.1. See §4.
+Of the 14 pipeline stages in `03`, **S1–S4 exist in full and S5 exists in
+part** (`receive`, `fingerprint`, `triage`, `understand`, plus S5's frame path
+resolution). S5's four fetch strategies (T4.3) and ranking/budget (T4.4) do
+not exist yet. S4's own algorithm has an unfilled seam: the LLM
+structured-extraction step is a Protocol with one implementation
+(`UnavailableExtractor`), pending the gateway at T5.1. See §4.
 
 ---
 
@@ -79,18 +81,50 @@ at T5.1. See §4.
 | Triage | Severity scoring, six gate reasons | `apps/api/tests/test_triage.py` (34) |
 | Python SDK | `init`, `capture_exception`, `add_breadcrumb`, ASGI middleware, batching, retry, buffer, never-raises | 171 unit + 13 integration tests |
 | S4 `understand` | Deterministic pre-parse, exception taxonomy (10 families), path resolution cascade steps 1–2, retrieval-plan construction, LLM extraction seam with hostile-reply-safe merge | `apps/worker/tests/test_understand_*.py` (161), `tests/integration/test_understand_corpus.py` (182) |
+| S5 frame path resolution | Cascade steps 3–4 (suffix match, filename search) against a fetched `RepoTree`, monorepo `root_path`/`service_map` scoping as a hard filter, `test_path_mapping`'s resolution logic as a pure function | `apps/worker/tests/test_retrieve_path_resolution.py` (20), `tests/integration/test_retrieve_path_resolution_corpus.py` (27) — **25/25 corpus frame paths resolve** |
 
-**Test totals:** 1,541 collected — 771 `unit`, 770 `integration`; 220 tests also
-carry the `security` marker (66 of those within `unit`, 154 within
-`integration`). Overall unit coverage **90%** against a ratchet of **75**; the
-new `pipeline/understand` package alone is at **99%**.
+**Test totals:** 1,588 collected — 791 `unit`, 797 `integration`; 220 tests also
+carry the `security` marker. Overall unit coverage **91%** against a ratchet
+of **75**; the new `pipeline/understand` and `pipeline/retrieve` packages are
+at 99% and 100% respectively.
 
 ---
 
 ## 4. Decisions taken in this session
 
-This session is T4.1 — S4 `understand`, the first ticket of Phase 7. Its
-decisions:
+This session covers T4.1 and T4.2, the first two tickets of Phase 7.
+
+### T4.2 — Frame path resolution
+
+- **A step 1/2 result is trusted only once verified against the tree, never
+  before.** `resolve_against_tree` checks every candidate `understand.frames`
+  produced — including the 0.95 configured-mapping case — against the fetched
+  (and optionally monorepo-scoped) tree before returning it unmodified, and
+  falls through to suffix/filename search when it isn't there. `config-02`
+  motivated this: heuristic stripping alone produces a well-formed path that
+  is not a real file, and nothing before this ticket could tell.
+- **Monorepo scoping is a hard filter, applied even to an otherwise-trusted
+  step 1/2 result**, not only to steps 3–4. `08` §3.2's own wording —
+  "scopes resolution to the right package **before** any matching happens" —
+  reads as absolute, and `test_scoping_also_applies_to_a_verified_step_1_2_result`
+  asserts it: a configured mapping naming a real file outside the scoped
+  package is not returned.
+- **Step 4's ambiguous case returns `resolved: null`, never an arbitrary
+  pick.** Choosing one of several same-basename candidates would look like a
+  resolution and would be a coin flip. `08` §3.2 says "flag
+  `low_frame_confidence`"; this is that flag implemented as an honest
+  non-answer, consistent with `03` §S5's "we do not guess."
+- **The `test_path_mapping` HTTP endpoint (`05` §6.6) is not built.**
+  `dry_run_path_mapping` is the endpoint's full resolution logic as a pure
+  function, matching the documented response shape exactly — but the route
+  needs `repositories` CRUD, which no ticket through Phase 7 builds, and
+  T4.2's acceptance criteria (`15` §6) are about the cascade and monorepo
+  scoping, not the HTTP surface. Building unrelated CRUD now would be the
+  detour `15` §14 warns this phase against. Recorded in `15` T4.2 and `05`
+  §6.6, not discovered as a gap later.
+- **Result: 25/25 corpus frame paths resolve**, up from T4.1's 24/25 measured
+  with S4 alone. `config-02` — the one case T4.1 could not fix, having no
+  repo access by design — is now correct via suffix matching.
 
 ### T4.1 — S4 `understand`
 
@@ -214,6 +248,7 @@ explicitly rejected — that deletes the only signal.
 | 7 | **`replay` and `live` transports raise `TransportUnavailable`** | V2 | Deliberate. They are listed and skipped in the contract suite rather than omitted — an omitted transport is one nobody remembers to add. |
 | 8 | **The LLM structured-extraction step of S4 is unimplemented** | T4.1 → T5.2 | `StructuredExtractor` is a Protocol with one implementation, `UnavailableExtractor`, which always raises. S4 runs on the deterministic pre-parse alone until T5.2 adds a real implementation. Deliberate — see `15` T4.1 and §4 above, not a gap discovered late. |
 | 9 | **Exception-family accuracy has no margin (23/25, exactly the T4.1 bar)** | T4.1 → T5.2 | `race-01` and `resource-01` are knowable only from breadcrumbs, and the deterministic taxonomy deliberately never reads them (`A1` §9). The extractor at T5.2 is expected to close this; if it does not, the threshold needs revisiting, not the taxonomy. Named explicitly in `tests/integration/test_understand_corpus.py` so a third miss is a build break. |
+| 10 | **`POST /v1/repositories/{id}/test_path_mapping` (`05` §6.6) is not wired as an HTTP endpoint** | T4.2 → Phase 16 or first `repositories`-CRUD ticket | `dry_run_path_mapping` is the full resolution logic as a pure function; the route needs `repositories` CRUD, which no ticket through Phase 7 builds. Deliberate scoping decision, not a gap — see `15` T4.2 and `05` §6.6. |
 
 ---
 
@@ -257,26 +292,28 @@ make fixtures-verify    # ground truth resolved against real code (also in CI)
 
 ## 8. What to continue with
 
-**Phase 7 — retrieval, T4.2 → T4.4, in order. T4.1 is done.** `15` §6 has the
-acceptance criteria; `03` §S4/§S5 has the contracts.
+**Phase 7 — retrieval, T4.3 → T4.4, in order. T4.1 and T4.2 are done.** `15`
+§6 has the acceptance criteria; `03` §S4/§S5 has the contracts.
 
 | Ticket | Scope | Status |
 |---|---|---|
 | T4.1 | Stage 4 — `understand` | ✅ Done — `apps/worker/roottrace_worker/pipeline/understand/` |
-| T4.2 | Frame path resolution | ⬜ Next — cascade steps 3–4 (`08` §3.2), plus `test_path_mapping` |
-| T4.3 | Stage 5 — retrieval strategies A, B, D, E | ⬜ Not started |
+| T4.2 | Frame path resolution | ✅ Done — `apps/worker/roottrace_worker/pipeline/retrieve/path_resolution.py`; corpus at 25/25 |
+| T4.3 | Stage 5 — retrieval strategies A, B, D, E | ⬜ Next |
 | T4.4 | Ranking, budget, and quality scoring | ⬜ Not started |
 
-**T4.2 starts from `understand/frames.py`'s `resolve_path`**, which already
-does steps 1–2 and returns `repo_path=None` at confidence 0.3 when they miss —
-that is the exact signal T4.2's tree search is meant to catch. `config-02` is
-the corpus case waiting on it: `/workspace/services/services/export.py` strips
-to `services/services/export.py`, which is not a real file, and T4.2's suffix
-match against the fetched tree is what should find `services/export.py`
-instead. Fixing that one case is what would move T4.1's frame-path score from
-24/25 to 25/25 — worth re-running `tests/integration/test_understand_corpus.py`
-after T4.2 lands, since its miss-set assertions are written to fail loudly if
-that happens.
+**T4.3 is the first ticket that calls the `GitHubGateway` for real content**,
+not just a tree listing. `resolve_frame_path` (T4.2) is what strategy A
+(frame-direct fetch) should call per frame before `fetch_file`, now that both
+halves of the cascade exist — S4's `must_fetch` list still carries only what
+steps 1–2 produced, not yet re-verified against a tree, so T4.3's fetch loop
+is where that re-verification first happens in the real pipeline rather than
+only in a test. Strategy B (call-graph expansion) is the one to get right
+first: `null-prop-01`'s root cause, `clients/tax_client.py`, is reachable
+only by one hop from `calculate_total`'s callees, and no plan or path
+resolver built so far can name it — that was flagged deliberately in T4.1
+(`tests/integration/test_understand_corpus.py::test_the_root_cause_file_is_reachable_only_by_expansion`)
+as the reason this phase exists.
 
 **The rule that governs this phase**, from `CLAUDE.md` and `15` §14:
 

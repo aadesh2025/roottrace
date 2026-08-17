@@ -471,6 +471,8 @@ After that instant, `POST /replay` returns `404 RT-NOTFOUND-0002` ("source event
 
 **`POST /v1/repositories/{id}/test_path_mapping`** — small endpoint, disproportionate value. Path resolution failures are the most common integration problem, and this makes them debuggable in ten seconds instead of by trial and error.
 
+**Implementation note (T4.2).** The resolution logic exists as `roottrace_worker.pipeline.retrieve.dry_run_path_mapping`, a pure function returning exactly this response shape. The route itself is not wired — it needs `repositories` CRUD, which no ticket through Phase 7 builds — so it is left for whichever ticket first adds that table's endpoints (`15` T4.2). Wiring is mechanical: load the repository row, call the function with its `path_mappings`/`root_path`/`service_map` and a tree fetched for its default ref.
+
 ```jsonc
 // request
 { "stack_paths": ["/app/services/checkout.py", "/usr/src/app/api/routes/checkout.py"] }

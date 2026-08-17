@@ -122,6 +122,12 @@ The repo tree is fetched **once per commit SHA** and cached in Redis for 24 h. A
 
 **Monorepo handling:** repositories carry an optional `root_path` (e.g. `services/checkout/`) and `service_map` binding the ingest `service` field to a subdirectory, so `service: "checkout-api"` scopes resolution to the right package before any matching happens.
 
+#### Implementation note — the cascade spans two stages (added at T4.1/T4.2)
+
+Steps 1–2 need no repository access and run in S4 (`03` §S4, `03` §8.1: *"S4 has no repo access by design"*) — `apps/worker/roottrace_worker/pipeline/understand/frames.py`. Steps 3–4 need the fetched tree and run in S5 — `apps/worker/roottrace_worker/pipeline/retrieve/path_resolution.py`. A step 1/2 result is **re-verified against the tree before being trusted**, including the configured-mapping case at 0.95: `config-02` in the corpus is a well-formed heuristic guess (`services/services/export.py`) that is not a real file, and only the tree can tell. Monorepo scoping is applied as a hard filter to steps 3–4 (and to a step 1/2 result being re-verified) — a match outside the scoped package is not returned even if it is unique in the whole tree.
+
+`resolve_frame_path`/`resolve_against_tree` take an already-fetched `RepoTree`; the once-per-SHA Redis caching described above is the caller's responsibility (the orchestrator, T8.2), not this function's. Step 4's ambiguous case returns `resolved: null` rather than an arbitrary pick among the candidates — "flag `low_frame_confidence`" is implemented as an honest non-answer, not a guess dressed as one.
+
 ### 3.3 Fetching content
 
 ```python
