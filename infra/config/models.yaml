@@ -1,0 +1,59 @@
+# RootTrace AI — tier routing (`06` §2.2)
+#
+# We route by capability tier, never by hardcoded model name — a provider
+# outage, a price change, or a better model release is a config edit here,
+# not a code change. Loaded by `apps/worker/roottrace_worker/ai/routing.py`
+# at `RT_LLM_CONFIG_PATH` (`A3`, default this file).
+#
+# `reasoning-a` and `reasoning-b` deliberately lead with DIFFERENT
+# providers (`06` §2.3): the critic's independence from the model that
+# produced the patch is architectural, not incidental, and is lost the
+# moment both tiers agree on a primary vendor.
+
+tiers:
+  fast:
+    - provider: anthropic
+      model: claude-haiku-4-5
+      max_tokens: 4096
+      timeout_s: 15
+    - provider: openai
+      model: gpt-4.1-mini
+      max_tokens: 4096
+      timeout_s: 15
+
+  reasoning-a:
+    - provider: anthropic
+      model: claude-sonnet-5
+      max_tokens: 8192
+      timeout_s: 60
+    - provider: openai
+      model: gpt-5
+      max_tokens: 8192
+      timeout_s: 60
+
+  reasoning-b:
+    - provider: openai
+      model: gpt-5
+      max_tokens: 8192
+      timeout_s: 60
+    - provider: anthropic
+      model: claude-sonnet-5
+      max_tokens: 8192
+      timeout_s: 60
+
+  embed:
+    - provider: voyage
+      model: voyage-code-3
+      dimensions: 1536
+    - provider: openai
+      model: text-embedding-3-large
+      dimensions: 1536
+
+failover:
+  trigger_on: [rate_limit, timeout, server_error, content_filter]
+  max_provider_attempts: 2
+  backoff:
+    base_ms: 1000
+    factor: 2
+    jitter: true
+    max_ms: 16000

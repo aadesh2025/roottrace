@@ -5,11 +5,12 @@
 > open, and what to pick up next. Deliberately un-numbered so it is never
 > mistaken for part of the frozen contract set.
 >
-> **Last updated:** 2026-08-18, this commit (T4.4's calibration finding
-> resolved by the coordinator; Phase 7 CLEARED; Phase 8 starting — see §1
-> and §5 item 13). Session ran unattended overnight per the coordinator's
-> explicit instructions, halted at the hard-stop as instructed, and resumed
-> with the coordinator's decision the same day.
+> **Last updated:** 2026-08-18, this commit (T5.1 — the LLM gateway — built;
+> Phase 8 underway. T4.4's calibration finding resolved by the coordinator
+> earlier the same day; Phase 7 cleared first — see §1 and §5 item 13).
+> Session ran unattended overnight per the coordinator's explicit
+> instructions, halted at the hard-stop as instructed, resumed with the
+> coordinator's decision, then continued into Phase 8 same-day.
 > Regenerate this from `docs/15-V1-BUILD-PLAN.md` and `git log` — those are the
 > authorities. If this file and `15` disagree, `15` wins.
 
@@ -17,40 +18,46 @@
 
 ## 1. Where the build is, in one line — READ THIS FIRST
 
-**All four Phase 7 tickets (T4.1–T4.4) are built, tested, and committed.
-Phase 7's hard-stop condition (§5 item 13) has been resolved by the
-coordinator, Phase 7 is cleared, and Phase 8 (T5.1 LLM gateway) is starting.**
-Budget is never exceeded and priority 1–2 items are never evicted — both
-clean from the start. The third and fourth bars ("both controls terminate as
-`insufficient_context`" / "everything else proceeds to reasoning") exposed a
-genuine problem with the *bar itself*, not a bug: measuring `03` §S5's
-original threshold ("fewer than 3 distinct files or fewer than 800 tokens")
-against the full corpus showed it firing on 18 of 23 fixable cases, and
-attempting to fix that by loosening the numbers proved impossible —
-`external-03` (a real bug) and `unfixable-01` (a designed control) admit the
-*identical* 2 files and 1231 tokens of priority 1–4 evidence, while
-`config-01` (also real) admits only 251. No threshold separates the two.
-**The coordinator decided:** judging fixability from evidence volume was
-never S5's job — `03` already gives S6 its own `insufficient_context` exit for
-exactly that judgment. S5's threshold is lowered to what S5 can honestly
-answer (did retrieval find real content or not); all 25 corpus cases,
-controls included, now correctly reach a `ContextBundle`, and whether the
-controls are fixable is deferred to S6, not yet built. Full detail in §5
-item 13 and §4's T4.4 section.
+**Phase 7 (retrieval) is complete and cleared. Phase 8 is underway: T5.1
+(the LLM gateway) is built, tested, and committed; T5.2 (prompt system) is
+next.**
+
+Phase 7's hard-stop condition (§5 item 13) was resolved by the coordinator
+before Phase 8 started: `03` §S5's original `insufficient_context` threshold
+("fewer than 3 distinct files or fewer than 800 tokens") could not
+distinguish a real, thin, self-contained bug from a designed control by
+evidence volume — `external-03` (real) and `unfixable-01` (control) admit
+the *identical* 2 files / 1231 tokens. The threshold was lowered to what S5
+can honestly judge (did retrieval find real content, full stop); judging
+*fixability* moved to S6, not yet built. Full detail in §5 item 13.
+
+**T5.1, the LLM gateway (`apps/worker/roottrace_worker/ai/*.py`):** one
+seam every pipeline stage will call through — provider selection and
+failover (Anthropic/OpenAI, real SDKs behind a `Provider` seam matching
+`GitHubGateway`'s shape), retry with backoff, the three-attempt structured-
+output ladder, exact token/cost accounting, the B9 cost-cap circuit breaker,
+outbound secret redaction, deterministic caching, and `llm_calls`
+persistence via a real `TenantRepository` (`11` §4 Layer 3, implemented for
+the first time). All three of `15` T5.1's accept criteria hold, tested
+against a scriptable `FakeProvider` — real network calls are a separate,
+key-gated live smoke test. 98% coverage. Two responsibilities this ticket's
+own table names are deliberately not built yet (a provider-health circuit
+breaker; provider-side prompt caching) — disclosed in §5 items 16–17, not
+silently skipped. Full detail in §4's T5.1 section.
 
 The system, as built: accept a production error over HTTP, sanitise it,
 fingerprint it, group it into an issue, score its severity, decide whether it
 deserves a pipeline run, turn it into a structured `ErrorUnderstanding` with a
 retrieval plan, resolve every stack frame in the corpus to the real file it
 came from, assemble frame-direct content plus a one-hop call graph plus git
-history plus a discovered test — reaching `clients/tax_client.py` for the
-running example (a file no frame, breadcrumb, plan, or path resolver names)
-through call-graph expansion alone — and rank/dedupe/budget all of that into a
-real `ContextBundle` for all 25 corpus cases. No vector search (deferred to V2
-by design), no reasoning, no patch, no sandbox, no dashboard yet.
+history plus a discovered test, rank/dedupe/budget all of that into a real
+`ContextBundle` for all 25 corpus cases — and now has a real gateway capable
+of turning any of that into a structured, cost-accounted, failover-safe LLM
+call, with nothing yet calling it (S4's `StructuredExtractor` and S6 both
+still need T5.2's prompt system first). No vector search (deferred to V2 by
+design), no reasoning, no patch, no sandbox, no dashboard yet.
 
-**Next:** Phase 8 — T5.1 (LLM gateway), T5.2 (prompt system), T5.3 (Stage 6
-`reason`) — per `15` §7. See §8.
+**Next:** T5.2 (prompt system) — per `15` §7. See §8.
 
 ---
 
@@ -69,7 +76,7 @@ by design), no reasoning, no patch, no sandbox, no dashboard yet.
 | 5 | Fixture system | T3.1–T3.3 | ✅ Complete |
 | 6 | Ingestion / fingerprinting | T2.1–T2.5 | ⚠️ Complete **except** T2.1's p95 budget and object storage — see §5 |
 | **7** | **Retrieval** | **T4.1–T4.4** | ✅ **Complete — all 4 tickets built, calibration finding resolved, see §5 item 13** |
-| 8 | AI reasoning | T5.1–T5.3 | ⬜ Not started — starting now |
+| 8 | AI reasoning | T5.1–T5.3 | 🔶 In progress — T5.1 done, T5.2/T5.3 not started |
 | 9 | Patch generation | T5.4 | ⬜ Not started |
 | 10 | Sandbox validation | T6.1–T6.5 | ⬜ Not started |
 | 11 | Repair loop | T7.1 | ⬜ Not started |
@@ -79,16 +86,19 @@ by design), no reasoning, no patch, no sandbox, no dashboard yet.
 | 15 | Evaluation harness | T10.1 | ⬜ Not started |
 | 16 | Dashboard | T8.2–T8.4, T9.1–T9.8 | ⬜ Not started |
 
-**17 tickets closed of 47** (T4.4 is the 17th), **Phase 7 cleared.** See §1.
-(39 tickets have their own section in `15`; T9.1–T9.8 are listed as a table
-in `15` §11.)
+**18 tickets closed of 47** (T5.1 is the 18th), **Phase 7 cleared, Phase 8
+underway.** See §1. (39 tickets have their own section in `15`; T9.1–T9.8
+are listed as a table in `15` §11.)
 
 Of the 14 pipeline stages in `03`, **S1–S5 all exist**, S5 in full: frame
 path resolution, four of five fetch strategies (strategy C deliberately
 deferred to V2 — the index is never populated in V1), and ranking/dedup/budget/
-quality scoring. S4's own algorithm has an unfilled seam: the LLM
+quality scoring. S4's own algorithm still has an unfilled seam: the LLM
 structured-extraction step is a Protocol with one implementation
-(`UnavailableExtractor`), pending the gateway at T5.1. See §4.
+(`UnavailableExtractor`). **The gateway that seam needs now exists**
+(`LLMGateway`, T5.1) — what is still missing is the prompt system (T5.2)
+that assembles the five-layer prompt `LLMGateway.complete` expects, and the
+second `StructuredExtractor` implementation that calls it. See §4.
 
 ---
 
@@ -110,17 +120,112 @@ structured-extraction step is a Protocol with one implementation
 | S5 frame path resolution | Cascade steps 3–4 (suffix match, filename search) against a fetched `RepoTree`, monorepo `root_path`/`service_map` scoping as a hard filter, `test_path_mapping`'s resolution logic as a pure function | `apps/worker/tests/test_retrieve_path_resolution.py` (20), `tests/integration/test_retrieve_path_resolution_corpus.py` (27) — **25/25 corpus frame paths resolve** |
 | S5 retrieval strategies A, B, D, E | Frame-direct fetch with `ast`-based function windowing; one-hop call-graph expansion (callees, callers via confirmed `search_symbol` hits, type definitions, import resolution); git blame/recent-commits/release-diff; convention + symbol-grep test discovery. Strategy C stubbed empty (V1 has no code index) | `apps/worker/tests/test_retrieve_ast_index.py` (28), `test_retrieve_import_resolution.py` (10), `test_retrieve_windowing.py` (8), `test_retrieve_strategies.py` (39), `tests/integration/test_retrieve_strategies_corpus.py` (98) — running example retrieves all 4 named files + the introducing commit; 20/23 non-control cases retrieve their own root cause file, the other 3 named and explained (`15` T4.3) |
 | S5 ranking, budget, quality scoring | `(priority, -relevance)` admission against the 24k token budget (dependency-free, deliberately-overcounting estimate); literal `03` §S5 relevance formula; dedup across strategies; `quality.score` (T4.4's own weighted formula, `03`/`06` §S11 consumes it opaquely); `ContextBundle` / `InsufficientContext` as the real, Pydantic S5 output contract; `insufficient_context` threshold revised (§5 item 13) to judge "did retrieval find real content," not fixability | `apps/worker/tests/test_retrieve_tokens.py` (4), `test_retrieve_quality.py` (8), `test_retrieve_ranking.py` (25), `tests/integration/test_retrieve_ranking_corpus.py` (77) — **budget never exceeded (0/25), priority 1–2 never evicted, all 25 corpus cases (including both controls) correctly reach a `ContextBundle` — see §5 item 13 for the fixability question this defers to S6** |
+| LLM gateway (T5.1) | `LLMGateway.complete` — provider seam (`Provider` Protocol, real Anthropic/OpenAI SDKs, `FakeProvider` for tests) with tier failover and per-provider retry/backoff; the three-attempt structured-output ladder; exact token/cost accounting from provider-reported usage; the B9 cost-cap circuit breaker (atomic Redis reserve/reconcile); outbound secret redaction; deterministic caching; `llm_calls` persistence via a real `TenantRepository` | `apps/worker/tests/test_ai_*.py` (18 files), `tests/integration/test_ai_db_persistence.py` (3, real Postgres), `tests/integration/test_ai_redaction_contract_agreement.py` (2, drift check against `apps/api`'s ingest sanitiser) — **all three `15` T5.1 accept criteria hold; 98% coverage on `apps/worker/roottrace_worker/ai/`** |
 
-**Test totals:** 1,887 collected — 915 `unit`, 972 `integration`; 220 tests also
-carry the `security` marker. Overall unit coverage **92%** against a ratchet
-of **75**; `pipeline/understand` and `pipeline/retrieve` are at 99% each — both
-clear `14` §10's ≥95% floor for retrieval/fingerprint/scoring code.
+**Test totals:** 1,995 collected — 1,018 `unit`, 977 `integration`; 220 tests
+also carry the `security` marker. Overall unit coverage **93%** against a ratchet
+of **75**; `pipeline/understand`, `pipeline/retrieve`, and `ai/` are all at
+98–99% — clearing `14` §10's ≥90%/≥85% pipeline-stage floor (the nearest
+named category — `14` has no dedicated "AI engine" row).
 
 ---
 
 ## 4. Decisions taken in this session
 
-This session covers all four Phase 7 tickets, T4.1 through T4.4.
+This session covers all four Phase 7 tickets (T4.1–T4.4) and Phase 8's
+first ticket, T5.1.
+
+### T5.1 — The LLM gateway
+
+**Read `06` §2.4's implementation note alongside this section — it has the
+per-mechanism detail; this is the decision log.**
+
+- **Provider seam matches `GitHubGateway`'s shape exactly, for the same
+  reason.** `Provider` (`ai/providers/base.py`) is a `Protocol`; the
+  contract tests never see a mock standing in for a real implementation,
+  they see `FakeProvider`, a structurally-real one. `15` T5.1's accept
+  criterion says "*simulated* provider failure" — that word choice is what
+  justified building the fake as the primary test surface rather than
+  mocking the Anthropic/OpenAI SDKs directly, with real network calls
+  exercised separately (`test_ai_provider_live.py`, skipped without a real
+  key) and the SDK exception-mapping logic itself verified by monkeypatching
+  the SDK client's own method (`test_ai_provider_{anthropic,openai}.py`) —
+  a middle layer neither purely offline nor requiring network.
+- **Real Anthropic and OpenAI SDKs, not a raw HTTP client.** No ADR
+  addresses this choice directly; the reasoning is the same class as `ast`
+  over Tree-sitter and no-tokenizer-dependency (T4.1–T4.4) — boring,
+  first-class support for structured output (forced tool use / native JSON
+  schema mode) that a hand-rolled HTTP client would have to reimplement
+  imperfectly. `apps/worker/pyproject.toml` gained `anthropic`, `openai`,
+  `psycopg[binary,pool]`, `redis`, `pyyaml`, `httpx`, `pydantic-settings` —
+  all either already used elsewhere in the workspace (`apps/api` uses
+  `psycopg`, `redis`, `httpx`, `pydantic-settings` for the identical
+  reasons) or the obvious first-party SDK for the provider it wraps.
+- **Every provider call that returns a response writes its own `llm_calls`
+  row, immediately** — not one row per `complete()` invocation. A native
+  attempt, a repair call, and a suspicious-content retry are each a real,
+  billed round-trip; a call that fails before returning anything (rate
+  limited, timed out) writes nothing, since nothing was billed. This reads
+  directly off `06` §8.3 ("every LLM call writes a row") taken literally
+  rather than "every gateway invocation."
+- **`TenantRepository` (`11` §4 Layer 3) is implemented for the first
+  time.** It existed only as pseudocode in `11` before this ticket — no
+  worker ticket through Phase 7 touched Postgres at all. Adapted to this
+  codebase's actual style (raw parameterized SQL via `psycopg`, matching
+  `apps/api/roottrace_api/ingest/repository.py`) rather than the doc's
+  ORM-flavoured sketch, since nothing in this codebase uses an ORM and the
+  *principle* — no tenant-table query without an explicit `project_id`,
+  enforced by `TenancyViolation` — does not depend on which query-building
+  style carries it.
+- **Cost is computed from what the provider actually reports, never
+  estimated.** Unlike T4.4's retrieval-budget token count (`chars / 3.5`,
+  deliberately conservative because no ground truth exists until the
+  content is retrieved), a completed provider call already reports exact
+  `tokens_in`/`tokens_out` — there is nothing left to estimate. `cost.py`
+  prices per 1,000 tokens rather than per token specifically so a
+  sub-$1-per-1M-token rate (the `fast` tier: $0.30 in / $1.50 out) survives
+  as an exact integer instead of truncating to zero, per `CLAUDE.md`'s
+  "money is an integer, never a float" rule.
+- **Two real doc/code mismatches found and fixed while building this,
+  neither trivial:**
+  - `A3-CONFIGURATION.md` documents `RT_PIPELINE_MIN_CONTEXT_FILES`/
+    `RT_PIPELINE_MIN_CONTEXT_TOKENS` as the operator override for T4.4's
+    `insufficient_context` threshold, but `ranking.py` never read them —
+    hardcoded module constants since T4.4 was first built, invisible until
+    reading `A3` for T5.1's own config wiring surfaced it. Also, `A3`'s
+    documented defaults (`3`/`800`) still matched the *original*,
+    corpus-disproven threshold, not the `1`/`1` values the coordinator's
+    decision had just landed — a stale default that would have silently
+    reintroduced the exact threshold that was just moved off of S5. Both
+    fixed in a dedicated commit before T5.1 began (`72156a2`).
+  - `ai/storage.py`'s first draft invented a dedicated `prompts` bucket,
+    justified by a claim ("`03`/`07` route artifacts to their own buckets")
+    that turned out to be fabricated — `03` §S1 step 8 actually specifies
+    one shared bucket (`RT_STORAGE_BUCKET`, default `roottrace-artifacts`)
+    with path prefixes per artifact type (`raw/{project_id}/...`). Caught
+    by checking the claim against the spec text before shipping it, not
+    after; fixed to `PATH_PREFIX = "prompts"` inside the one configured
+    bucket, and `settings.py` gained the `storage_bucket` field `A3`
+    already documented.
+- **Two responsibilities `06` §2.4's own table names are not built,
+  disclosed rather than silently skipped** (§5 items 16–17): a
+  provider-health circuit breaker independent of the B9 cost breaker (no
+  section gives it an algorithm the way §8.2a gives the cost breaker one);
+  and provider-side prompt caching (Anthropic `cache_control` / OpenAI
+  automatic caching) — needs the L1–L5 prompt-layer boundary T5.2
+  introduces, since `RenderedPrompt` here only carries `system`/`user`.
+  The *deterministic* content-hash cache (a different mechanism, same
+  table row) is built and tested.
+- **Worker gets its first typed `Settings`** (`apps/worker/roottrace_worker/
+  settings.py`), deliberately duplicated from `apps/api/roottrace_api/
+  settings.py` rather than shared — same reasoning as the SDK's duplication,
+  since the two packages have never declared a dependency on each other and
+  are separate deployables with separate privilege boundaries. Kept the
+  `extra="forbid"` + unknown-`RT_*`-variable boot scan `api`'s version has,
+  even though this file's own field set is narrower — the worker holds
+  *more* sensitive credentials than `api` (the service-role key, provider
+  keys), so a silently-ignored typo'd env var is a worse failure mode here,
+  not a lesser one.
 
 ### T4.4 — Ranking, budget, quality scoring — the finding, and its resolution
 
@@ -455,6 +560,9 @@ as any other session.**
 | 11 | **Three corpus cases have no reachable root cause under T4.3's four strategies** | T4.3 → T4.4 / T5.x | `regression-02` (2 hops away), `config-02` (root cause is a composition-root-injected value's producer, no call edge), `type-mismatch-03` (root cause and failure point are sibling functions sharing only data, no call edge). Named by case id in `tests/integration/test_retrieve_strategies_corpus.py::ROOT_CAUSE_UNREACHABLE_BY_T4_3`; whether T4.4's budget allowing a second hop, or S6's reasoning-driven follow-up retrieval, closes any of these is an open question for later phases. |
 | 12 | **Release correlation (`03` §S5 strategy D) has no automatic "previous release" lookup** | T4.3 → T8.2 or a `repositories`/releases data source | `strategy_d_git_history`'s `release_diff` is `None` unless the caller supplies `previous_ref` explicitly — the mechanism (`gateway.compare`) is built and tested, but nothing upstream yet knows what the previous release tag was; that needs a releases table or GitHub API call this ticket has no reason to add. |
 | 14 | **S6 must independently reproduce the fixable/unfixable split item 13 moved off of S5** | T5.3 | Now that S5 admits all 25 corpus cases as `ContextBundle`, nothing yet asserts that S6 classifies `unfixable-01`/`unfixable-02` as `insufficient_context` (their `expected.final_status`) while the other 23 proceed. This is the acceptance property `test_the_controls_terminate_as_insufficient_context` used to check at S5 before item 13's resolution moved it to S6 — T5.3's own corpus test should assert it directly once S6 exists, not assume it. |
+| 15 | **`LLMGateway` has no factory that builds it from `Settings`** | T5.1 → T5.2 or wherever first constructs a live gateway | `apps/worker/roottrace_worker/settings.py` declares every field the gateway needs (API keys, cache TTL, cost caps); `gateway.py` takes them all as constructor arguments. Nothing yet connects the two — every current caller (all of them tests) constructs `LLMGateway(...)` directly with explicit providers/routing/storage/db/redis objects. Deliberate: T5.1's own scope is the mechanism's correctness, not application wiring, and the real `psycopg`/`redis` connections a factory would need don't exist as reusable worker-level objects yet either. Whichever ticket first has a pipeline stage call `gateway.complete()` for real needs this. |
+| 16 | **No provider-health circuit breaker** | T5.1 → undecided | `06` §2.4's responsibilities table names one ("opens ... when a provider exceeds its error threshold"), independent of the B9 cost-cap breaker (built). No section gives it an algorithm the way §8.2a gives the cost breaker one, so nothing was built against a guess. `_dispatch_tier` walks the configured tier order fresh on every call with no memory of a provider's recent failures. |
+| 17 | **No provider-side prompt caching** | T5.1 → T5.2 | `06` §2.4/§3.1 name provider-native caching of the static L1-L3 prompt layers (Anthropic `cache_control`, OpenAI automatic caching) as a cost/latency optimisation, distinct from the *deterministic* content-hash cache (built, `ai/cache.py`). `RenderedPrompt` currently only carries `system`/`user` — the finer L1/L2/L3/L4/L5 split T5.2 introduces is what would let a provider call mark the right spans cacheable, so this is scoped there rather than guessed at here. |
 
 ---
 
@@ -499,8 +607,7 @@ make fixtures-verify    # ground truth resolved against real code (also in CI)
 ## 8. What to continue with
 
 **Phase 7 is complete and cleared (all four tickets, item 13 resolved — see
-§5). Phase 8 (`15` §7) starts next: T5.1 (LLM gateway), T5.2 (prompt system),
-T5.3 (Stage 6 `reason`).**
+§5). Phase 8 (`15` §7) is underway: T5.1 done, T5.2 next, then T5.3.**
 
 | Ticket | Scope | Status |
 |---|---|---|
@@ -508,24 +615,21 @@ T5.3 (Stage 6 `reason`).**
 | T4.2 | Frame path resolution | ✅ Done — `apps/worker/roottrace_worker/pipeline/retrieve/path_resolution.py`; corpus at 25/25 |
 | T4.3 | Stage 5 — retrieval strategies A, B, D, E | ✅ Done — `apps/worker/roottrace_worker/pipeline/retrieve/strategies.py` |
 | T4.4 | Ranking, budget, and quality scoring | ✅ Done — all bars clean; threshold revised per §5 item 13 |
+| T5.1 | LLM gateway | ✅ Done — `apps/worker/roottrace_worker/ai/*.py`; all 3 accept bars clean; see §4's T5.1 section and §5 items 15–17 for disclosed gaps |
 
-**T5.1 — LLM gateway** (`15` §7): tier routing, provider failover
-(Anthropic primary / OpenAI failover per `06` §2.2, reversed for the critic),
-retry with backoff, structured output with the three-attempt ladder, token
-and cost accounting, prompt hashing and caching, circuit breaker, outbound
-secret scanning. Accept: simulated provider failure fails over correctly;
-malformed JSON triggers a repair call on the cheap tier; every call writes an
-`llm_calls` row with exact tokens and cost. This is what finally gives T4.1's
-`StructuredExtractor` Protocol (§5 item 8) a real implementation and what
-T4.4's `RetrievalOutcome` will be reasoned over.
-
-**T5.2 — Prompt system**: five-layer assembly, untrusted-content fencing
-(the `ContextBundle`'s file contents, breadcrumbs, and error messages are all
-hostile by CLAUDE.md's standing rule), tag neutralisation, instruction-
-pattern flagging, versioned prompt files, schema derived from Pydantic.
-Accept: a prompt containing `</untrusted_context>` in the data is escaped;
-injection phrases are flagged and recorded on the `llm_calls` row. `A2` has
-the prompt library to build from.
+**T5.2 — Prompt system** (`15` §7): five-layer assembly, untrusted-content
+fencing (the `ContextBundle`'s file contents, breadcrumbs, and error
+messages are all hostile by `CLAUDE.md`'s standing rule), tag
+neutralisation, instruction-pattern flagging, versioned prompt files,
+schema derived from Pydantic. Accept: a prompt containing
+`</untrusted_context>` in the data is escaped; injection phrases are
+flagged and recorded on the `llm_calls` row. `A2` has the prompt library to
+build from. This is what finally gives T4.1's `StructuredExtractor`
+Protocol (§5 item 8) a real implementation, and what closes §5 items 15
+(the `Settings` → `LLMGateway` factory has nowhere to call `.complete()`
+from yet) and 17 (provider-side prompt caching needs the L1–L5 layer split
+this ticket introduces) — worth building `RenderedPrompt` construction with
+those two in mind rather than retrofitting them after.
 
 **T5.3 — Stage 6 `reason`**: five-step protocol, hypothesis elimination,
 evidence binding with post-validation (P2 — every claim binds to a file path,
@@ -534,7 +638,7 @@ once-then-terminate on binding failure (the `insufficient_context` exit item
 13 moved the controls' fixability judgment onto — see §5 item 14). Accept:
 ≥20/25 fixtures identify the correct root-cause file; 100% of surfaced
 findings pass evidence validation; a deliberately fabricated citation is
-rejected; **and** (item 14, new) `unfixable-01`/`unfixable-02` terminate as
+rejected; **and** (item 14) `unfixable-01`/`unfixable-02` terminate as
 `insufficient_context` while the other 23 proceed — the property T4.4's own
 corpus test used to check before item 13 moved it here.
 

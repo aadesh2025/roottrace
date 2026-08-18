@@ -58,6 +58,8 @@ dev = [
   # does not have (deviation from `14` §4, noted there).
   "psycopg[binary]>=3.2,<4.0",
   "httpx>=0.28",
+  # mypy --strict stub for T5.1's `ai/routing.py` (`yaml.safe_load`).
+  "types-PyYAML>=6.0,<7.0",
 ]
 
 # ── ruff ───────────────────────────────────────────────────────────────────
@@ -112,6 +114,11 @@ ignore = [
 # One of them carrying an `Error` suffix and the other not would make the
 # symmetry look accidental.
 "apps/worker/roottrace_worker/pipeline/understand/extractor.py" = ["N818"]
+# Same rule again: `TenancyViolation` is the exact name `docs/11` §4's own
+# `TenantRepository` sketch raises. T5.1's `db.py` implements that class for
+# the first time; renaming its exception for a style rule would put the code
+# out of step with the one security doc that names it.
+"apps/worker/roottrace_worker/ai/db.py" = ["N818"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"

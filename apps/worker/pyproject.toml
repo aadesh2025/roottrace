@@ -10,7 +10,26 @@ requires-python = ">=3.12,<3.13"
 # model and the validator that checks its reply to be the same object — which
 # a hand-rolled validator cannot be. Already a transitive dependency of `api`
 # via FastAPI, so this pins it rather than introducing it.
-dependencies = ["pydantic>=2.9,<3.0"]
+dependencies = [
+  "pydantic>=2.9,<3.0",
+  "pydantic-settings>=2.7,<3.0",
+  # Tier routing config (T5.1, `06` §2.2) — `infra/config/models.yaml`.
+  "pyyaml>=6.0,<7.0",
+  # T5.1's two LLM providers (`06` §2.2).
+  "anthropic>=0.40,<1.0",
+  "openai>=1.58,<2.0",
+  # `llm_calls` persistence (T5.1) — same client `apps/api` uses for
+  # `rt_ingest`, same reasoning: a direct connection over PostgREST.
+  "psycopg[binary,pool]>=3.2,<4.0",
+  # The cost-cap circuit breaker (B9) and the deterministic-stage cache
+  # (`06` §2.4) — same library `apps/api` uses for idempotency and rate
+  # limits.
+  "redis>=5.2,<7.0",
+  # Object storage writes for prompt/response persistence (T5.1) — a
+  # direct REST call against Supabase Storage rather than the `supabase-py`
+  # SDK, which pulls in gotrue/postgrest/realtime/storage3 for one PUT.
+  "httpx>=0.28,<1.0",
+]
 
 [build-system]
 requires = ["hatchling"]

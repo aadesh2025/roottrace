@@ -101,6 +101,20 @@ Responsibilities, all in one place:
 | Logging | Full prompt + response persisted to object storage, referenced from `llm_calls` |
 | Prompt-injection defence | Untrusted content fenced and instruction-stripped before assembly |
 
+#### Implementation note — the gateway, built at T5.1
+
+`apps/worker/roottrace_worker/ai/{gateway,routing,retry,structured,cost,redaction,cache,circuit_breaker,db,storage,contracts,errors}.py` — `LLMGateway.complete` is the one seam; `apps/worker/roottrace_worker/settings.py` gives the worker its first typed config surface (a deliberate duplicate of `apps/api/roottrace_api/settings.py`, not a shared import — the two packages have never depended on each other).
+
+**Provider seam, same shape as `GitHubGateway`.** `Provider` (`ai/providers/base.py`) is a `Protocol`; `AnthropicProvider`/`OpenAIProvider` wrap the real SDKs (structured output via forced tool use / `response_format=json_schema`), and `FakeProvider` is the scriptable double every orchestration test in `test_ai_gateway.py` runs against — `15` T5.1's own accept criterion says "*simulated* provider failure", so real network calls are exercised separately, in `test_ai_provider_live.py`, skipped unless a real API key is present.
+
+**Every provider call that returns a response writes its own `llm_calls` row, immediately** — a native attempt, a repair call, and a suspicious-content retry are each real, billable round-trips, recorded as they happen rather than batched into one row per `complete()` call. A call that fails before returning anything writes nothing: no tokens, nothing to attribute.
+
+**The circuit breaker built here is `06` §8.2a's B9 cost-cap breaker specifically** — atomic `INCRBY`/`DECRBY` reservation against a daily and monthly key, exactly as that section's pseudocode. The other half this table's "Circuit breaker" row names — a provider tripping open after its own error threshold, independent of cost — is not built; nothing in this document gives that mechanism an algorithm the way §8.2a gives the cost breaker one, and `_dispatch_tier` currently walks the configured tier order fresh on every call with no memory of a provider's recent health. Left as an open item, not a silent gap — see `PROJECT-STATUS.md`.
+
+**Provider-side prompt caching (this section's `RenderedPrompt`'s eventual L1-L3 split, `06` §3.1) is also not built yet, and is a different mechanism from the one that is.** What ships at T5.1 is the *deterministic* cache this table's "Caching" row means — S4-shaped calls with identical input, served from Redis by `prompt_hash` within `RT_LLM_CACHE_TTL_SECONDS`, at zero additional cost on a hit. `RenderedPrompt` here only carries `system`/`user`, not yet the finer L1/L2/L3/L4/L5 boundary T5.2 introduces — provider-native caching (Anthropic's `cache_control`, OpenAI's automatic prompt caching) needs that boundary to know what is safe to mark cacheable, so it is scoped to T5.2, not missing from T5.1.
+
+**No tokenizer dependency, cost computed from provider-reported usage, not estimated.** Unlike T4.4's retrieval-budget estimate (`chars / 3.5`, deliberately conservative because no ground truth exists until the call happens), `cost.py` prices the *exact* `tokens_in`/`tokens_out` every provider response reports — the same reasoning that ruled out a tokenizer for the budget does not apply here, since there is nothing left to estimate once the call has returned.
+
 ---
 
 ## 3. Prompt architecture

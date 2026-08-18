@@ -436,6 +436,22 @@ Tier routing, provider failover, retry with backoff, structured output with the 
 
 **Accept:** Simulated provider failure fails over correctly. Malformed JSON triggers a repair call on the cheap tier. Every call writes an `llm_calls` row with exact tokens and cost.
 
+**Built.** `apps/worker/roottrace_worker/ai/*.py` — see `06` §2.4's implementation note for the full shape. All three accept criteria hold, tested against `FakeProvider` (T5.1's own bar is "*simulated* provider failure"):
+
+| Bar | Result |
+|---|---|
+| Simulated provider failure fails over correctly | ✅ `test_a_rate_limited_primary_provider_fails_over_to_the_next` and 4 related tests in `test_ai_gateway.py` |
+| Malformed JSON triggers a repair call on the cheap tier | ✅ `test_malformed_json_triggers_a_repair_call_on_the_fast_tier` — repair is dispatched to `fast`, not the original tier |
+| Every call writes an `llm_calls` row with exact tokens and cost | ✅ `test_the_llm_calls_row_carries_exact_tokens_and_cost`, plus real Postgres coverage in `tests/integration/test_ai_db_persistence.py` |
+
+98% coverage on `apps/worker/roottrace_worker/ai/`, clearing `14` §10's pipeline-stage floor. `apps/worker/roottrace_worker/settings.py` is the worker's first typed config surface (env var wiring per `A3`), and `TenantRepository` (`11` §4 Layer 3) is implemented for the first time, both scoped narrowly to what `llm_calls` persistence needs.
+
+**Two things this table's own responsibilities list names are deliberately not built yet, disclosed rather than silently skipped** — see `06` §2.4's implementation note and `PROJECT-STATUS.md` for the full reasoning:
+- A provider-health circuit breaker (independent of B9's cost breaker) — nothing in `06` gives it an algorithm the way §8.2a gives the cost breaker one.
+- Provider-side prompt caching (Anthropic `cache_control` / OpenAI automatic caching) — needs the L1-L5 prompt-layer boundary T5.2 introduces; the deterministic content-hash cache (a different mechanism, same table row) is built.
+
+Two doc-drift fixes made in the same commit: `03` §S1's object-storage convention (`03` line 198 — one bucket, path-prefixed, not a bucket per artifact type) is what `ai/storage.py` follows, correcting an earlier draft of this module that invented a dedicated bucket; and `A3`'s `RT_STORAGE_BUCKET` is now wired into `settings.py`.
+
 ### T5.2 Prompt system
 
 Five-layer assembly, untrusted-content fencing, tag neutralisation, instruction-pattern flagging, versioned prompt files, schema derived from Pydantic.
