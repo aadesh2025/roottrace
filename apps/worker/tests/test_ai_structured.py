@@ -40,13 +40,43 @@ def test_valid_json_missing_a_required_field_fails_validation() -> None:
 
 
 def test_build_repair_prompt_carries_the_original_and_the_error() -> None:
+    template = "ERROR: {validator_error}\nORIGINAL: {original_response}\nFix it."
     system, user = build_repair_prompt(
-        original_raw_text="{bad", validator_error="invalid JSON: line 1", schema_name="Verdict"
+        template=template,
+        system="You are a repair assistant.",
+        original_raw_text="{bad",
+        validator_error="invalid JSON: line 1",
     )
-    assert "Return ONLY the corrected JSON" in system
+    assert system == "You are a repair assistant."
     assert "{bad" in user
     assert "invalid JSON: line 1" in user
-    assert "Verdict" in user
+
+
+def test_build_repair_prompt_matches_a2s_literal_schema_repair_template() -> None:
+    """`A2` §9's `schema_repair/v1.md` is the binding text this function
+    fills — a regression test for the T5.1 drift (a hardcoded, different
+    repair instruction) T5.2 fixed."""
+    from pathlib import Path
+
+    template_path = (
+        Path(__file__).resolve().parents[1]
+        / "roottrace_worker"
+        / "ai"
+        / "prompts"
+        / "schema_repair"
+        / "v1.md"
+    )
+    template = template_path.read_text(encoding="utf-8")
+    _system, user = build_repair_prompt(
+        template=template,
+        system="irrelevant for this assertion",
+        original_raw_text="{bad",
+        validator_error="invalid JSON: line 1",
+    )
+    assert "{bad" in user
+    assert "invalid JSON: line 1" in user
+    assert "Return ONLY the corrected JSON" in user
+    assert "do not rephrase" in user
 
 
 def test_salvage_extracts_json_wrapped_in_prose() -> None:

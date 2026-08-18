@@ -28,11 +28,19 @@ from roottrace_worker.ai.errors import (
     SuspiciousContentRejectedError,
 )
 from roottrace_worker.ai.gateway import LLMGateway
+from roottrace_worker.ai.prompts.registry import load_prompt_registry
 from roottrace_worker.ai.providers.fake import FakeProvider, ScriptedFailure, ScriptedSuccess
 from roottrace_worker.ai.routing import parse_model_routing
 from roottrace_worker.ai.storage import InMemoryObjectStore
 
 pytestmark = pytest.mark.unit
+
+#: The real registry — `ai/prompts/schema_repair/v1.md` is `A2` §9's
+#: literal, binding text; a fake stand-in would let a test pass while the
+#: real repair prompt drifted, which is exactly the bug this file's own
+#: `test_malformed_json_triggers_a_repair_call_on_the_fast_tier` exists to
+#: catch.
+_PROMPTS = load_prompt_registry()
 
 
 class Verdict(BaseModel):
@@ -105,6 +113,7 @@ def _gateway(
     kwargs: dict[str, object] = {
         "providers": providers,
         "routing": parse_model_routing(routing_doc or _routing_doc()),
+        "prompts": _PROMPTS,
         "storage": InMemoryObjectStore(),
         "db": InMemoryLLMCallsRepository(),
         "sleep": _noop_sleep,
@@ -318,11 +327,8 @@ async def test_a_secret_in_the_prompt_is_redacted_before_reaching_the_provider()
 # ── Suspicious content (`06` §3.2) ───────────────────────────────────────
 
 
-async def test_a_response_echoing_a_flagged_injection_pattern_is_rejected() -> None:
-    anthropic = FakeProvider(name="anthropic", outcomes=[ScriptedSuccess(VALID_JSON)])
-    gateway = _gateway(providers={"anthropic": anthropic, "openai": FakeProvider("openai", [])})
-
-    request = _request(
+def _flagged_request() -> CompletionRequest[Verdict]:
+    return _request(
         prompt=RenderedPrompt(
             system="s",
             user="u",
@@ -330,8 +336,59 @@ async def test_a_response_echoing_a_flagged_injection_pattern_is_rejected() -> N
             flagged_injection_patterns=("null deref",),
         )
     )
+
+
+async def test_a_response_echoing_a_flagged_pattern_is_retried_once_then_rejected() -> None:
+    """`06` §3.2: "rejected and retried once" — not rejected outright."""
+    anthropic = FakeProvider(
+        name="anthropic", outcomes=[ScriptedSuccess(VALID_JSON), ScriptedSuccess(VALID_JSON)]
+    )
+    gateway = _gateway(providers={"anthropic": anthropic, "openai": FakeProvider("openai", [])})
+
     with pytest.raises(SuspiciousContentRejectedError):
-        await gateway.complete(request)
+        await gateway.complete(_flagged_request())
+    assert len(anthropic.calls) == 2
+
+
+async def test_a_response_echoing_a_flagged_pattern_that_clears_on_retry_succeeds() -> None:
+    clean_json = '{"root_cause": "a clean answer", "confidence": 0.8}'
+    anthropic = FakeProvider(
+        name="anthropic", outcomes=[ScriptedSuccess(VALID_JSON), ScriptedSuccess(clean_json)]
+    )
+    gateway = _gateway(providers={"anthropic": anthropic, "openai": FakeProvider("openai", [])})
+
+    result = await gateway.complete(_flagged_request())
+    assert result.output.root_cause == "a clean answer"
+    assert len(anthropic.calls) == 2
+
+
+async def test_every_suspicious_content_check_writes_a_flagged_llm_calls_row() -> None:
+    """T5.2's own regression test: T5.1 hardcoded `suspicious_content_detected
+    =False` on every persisted row regardless of the prompt's actual flags."""
+    anthropic = FakeProvider(
+        name="anthropic", outcomes=[ScriptedSuccess(VALID_JSON), ScriptedSuccess(VALID_JSON)]
+    )
+    db = InMemoryLLMCallsRepository()
+    gateway = _gateway(
+        providers={"anthropic": anthropic, "openai": FakeProvider("openai", [])}, db=db
+    )
+
+    with pytest.raises(SuspiciousContentRejectedError):
+        await gateway.complete(_flagged_request())
+    assert len(db.records) == 2
+    assert all(record.suspicious_content_detected for record in db.records)
+
+
+async def test_an_unflagged_prompt_never_reaches_the_retry_path() -> None:
+    anthropic = FakeProvider(name="anthropic", outcomes=[ScriptedSuccess(VALID_JSON)])
+    db = InMemoryLLMCallsRepository()
+    gateway = _gateway(
+        providers={"anthropic": anthropic, "openai": FakeProvider("openai", [])}, db=db
+    )
+
+    await gateway.complete(_request())
+    assert len(anthropic.calls) == 1
+    assert db.records[0].suspicious_content_detected is False
 
 
 # ── Deterministic caching (`06` §2.4) ────────────────────────────────────

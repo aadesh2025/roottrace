@@ -37,6 +37,7 @@ from roottrace_worker.ai.errors import (
     SchemaValidationFailedError,
     SuspiciousContentRejectedError,
 )
+from roottrace_worker.ai.prompts.registry import PromptRegistry
 from roottrace_worker.ai.providers.base import Provider, ProviderRequest, ProviderResponse
 from roottrace_worker.ai.redaction import scan_and_redact
 from roottrace_worker.ai.retry import compute_backoff_ms, should_fail_over
@@ -75,6 +76,7 @@ class LLMGateway:
         *,
         providers: dict[str, Provider],
         routing: ModelRouting,
+        prompts: PromptRegistry,
         storage: ObjectStore,
         db: LLMCallsRepositoryLike,
         cache_redis: CacheRedisLike | None = None,
@@ -88,6 +90,7 @@ class LLMGateway:
     ) -> None:
         self._providers = providers
         self._routing = routing
+        self._prompts = prompts
         self._storage = storage
         self._db = db
         self._cache_redis = cache_redis
@@ -156,6 +159,8 @@ class LLMGateway:
     ) -> LLMResult[M]:
         start = self._clock()
 
+        prompt_flagged = bool(request.prompt.flagged_injection_patterns)
+
         native = await self._dispatch_tier(
             request.tier,
             system=redacted_system,
@@ -170,18 +175,21 @@ class LLMGateway:
             prompt_hash=prompt_hash,
             attempt=_NATIVE_ATTEMPT,
             schema_repair_used=False,
+            suspicious_content_detected=prompt_flagged,
             raw_text=native.response.raw_text,
         )
 
         accepted = native
+        accepted_system, accepted_user = redacted_system, redacted_user
         parsed = native_parse
         schema_repair_used = False
 
         if not native_parse.ok:
             repair_system, repair_user = structured.build_repair_prompt(
+                template=self._prompts.get("schema_repair").text,
+                system=self._prompts.get("system").text,
                 original_raw_text=native.response.raw_text,
                 validator_error=native_parse.error or "unknown validation error",
-                schema_name=schema_name,
             )
             repair = await self._dispatch_tier(
                 "fast",
@@ -199,9 +207,11 @@ class LLMGateway:
                 prompt_hash=prompt_hash,
                 attempt=_REPAIR_ATTEMPT,
                 schema_repair_used=True,
+                suspicious_content_detected=prompt_flagged,
                 raw_text=repair.response.raw_text,
             )
             accepted, parsed, schema_repair_used = repair, repair_parse, True
+            accepted_system, accepted_user = repair_system, repair_user
 
             if not repair_parse.ok:
                 salvaged = structured.salvage(repair.response.raw_text)
@@ -218,12 +228,41 @@ class LLMGateway:
             # sets a validated output or raises first; kept as a hard stop rather than an
             # `assert` (stripped under `-O`) in case a future branch breaks that invariant.
             raise SchemaValidationFailedError(schema_name, "no output produced")
+        output = parsed.output
 
-        raw_text_for_check = accepted.response.raw_text
-        if request.prompt.flagged_injection_patterns and any(
-            pattern in raw_text_for_check for pattern in request.prompt.flagged_injection_patterns
+        if prompt_flagged and _echoes_flagged_pattern(
+            accepted.response.raw_text, request.prompt.flagged_injection_patterns
         ):
-            raise SuspiciousContentRejectedError(request.prompt.flagged_injection_patterns[0])
+            # `06` §3.2's output-side check: rejected and retried ONCE before
+            # giving up — the same prompt, dispatched again, since a model
+            # regurgitating an injected instruction on one attempt does not
+            # mean it will on the next.
+            retry = await self._dispatch_tier(
+                request.tier if not schema_repair_used else "fast",
+                system=accepted_system,
+                user=accepted_user,
+                schema=schema,
+                schema_name=schema_name,
+            )
+            retry_parse = structured.parse_and_validate(
+                retry.response.raw_text, request.output_model
+            )
+            await self._record_call(
+                request,
+                retry,
+                prompt_hash=prompt_hash,
+                attempt=_NATIVE_ATTEMPT if not schema_repair_used else _REPAIR_ATTEMPT,
+                schema_repair_used=schema_repair_used,
+                suspicious_content_detected=True,
+                raw_text=retry.response.raw_text,
+            )
+            if not retry_parse.ok or _echoes_flagged_pattern(
+                retry.response.raw_text, request.prompt.flagged_injection_patterns
+            ):
+                raise SuspiciousContentRejectedError(request.prompt.flagged_injection_patterns[0])
+            if retry_parse.output is None:  # pragma: no cover — guaranteed by the raise above
+                raise SchemaValidationFailedError(schema_name, "no output produced")
+            accepted, output = retry, retry_parse.output
 
         latency_ms = int((self._clock() - start) * 1000)
         cost = compute_cost_micro_usd(
@@ -248,7 +287,7 @@ class LLMGateway:
             )
 
         return LLMResult(
-            output=parsed.output,
+            output=output,
             provider=accepted.provider,
             model=accepted.model,
             tier=request.tier,
@@ -328,6 +367,7 @@ class LLMGateway:
         prompt_hash: str,
         attempt: int,
         schema_repair_used: bool,
+        suspicious_content_detected: bool,
         raw_text: str,
     ) -> None:
         prompt_url = await self._storage.put(
@@ -364,7 +404,7 @@ class LLMGateway:
                 attempt=attempt,
                 failover_from=dispatched.failover_from,
                 schema_repair_used=schema_repair_used,
-                suspicious_content_detected=False,
+                suspicious_content_detected=suspicious_content_detected,
             )
         )
 
@@ -399,6 +439,15 @@ class LLMGateway:
             schema_repair_used=False,
             suspicious_content_detected=False,
         )
+
+
+def _echoes_flagged_pattern(text: str, patterns: tuple[str, ...]) -> bool:
+    """`06` §3.2's output-side check: did the model's own response repeat
+    one of the phrases `ai/prompts/assembly.py` flagged in the untrusted
+    input it was shown. Case-insensitive, matching
+    `detect_injection_patterns`'s own comparison."""
+    lowered = text.lower()
+    return any(pattern in lowered for pattern in patterns)
 
 
 def _hash_prompt(*, prompt_version: str, system: str, user: str) -> str:

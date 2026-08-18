@@ -55,25 +55,19 @@ def parse_and_validate[M: BaseModel](raw_text: str, output_model: type[M]) -> Pa
 
 
 def build_repair_prompt(
-    *, original_raw_text: str, validator_error: str, schema_name: str
+    *, template: str, system: str, original_raw_text: str, validator_error: str
 ) -> tuple[str, str]:
-    """`06` §4.1's repair instruction, exactly: "Return ONLY corrected JSON.
-    Change nothing else." Returns `(system, user)`, matching every
-    provider's own split — the repair call is a formatting task and gets
-    the cheap tier, but it is still a normal `Provider.complete` call from
-    the provider's point of view."""
-    system = (
-        "You correct malformed JSON to match a schema. You do not change "
-        "the meaning of any value, only the syntax and shape. Return ONLY "
-        "the corrected JSON. Change nothing else."
-    )
-    user = (
-        f"The following response was supposed to validate against the "
-        f"{schema_name!r} schema and did not.\n\n"
-        f"--- ORIGINAL RESPONSE ---\n{original_raw_text}\n\n"
-        f"--- VALIDATOR ERROR ---\n{validator_error}\n\n"
-        "Return ONLY corrected JSON. Change nothing else."
-    )
+    """Fills `A2` §9's `schema_repair/v1.md` template (`{validator_error}`,
+    `{original_response}`) — the literal, binding text, loaded by the
+    caller from `ai/prompts/registry.py` rather than duplicated here.
+    `system` is likewise supplied by the caller (`ai/prompts`'s shared L1,
+    `06` §2.4) rather than a second, drifted copy living in this module.
+
+    T5.1's first draft of this function hardcoded its own repair
+    instruction instead of `A2`'s literal text — a real drift, caught and
+    fixed at T5.2 once the prompt registry this function should have used
+    from the start actually existed."""
+    user = template.format(validator_error=validator_error, original_response=original_raw_text)
     return system, user
 
 

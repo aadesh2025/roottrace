@@ -14,6 +14,7 @@ from roottrace_worker.pipeline.understand.contracts import (
     Hypothesis,
     RetrievalPlan,
 )
+from roottrace_worker.pipeline.understand.extraction_schema import UnderstandExtractionReply
 from roottrace_worker.pipeline.understand.extractor import (
     ExtractionRequest,
     ExtractorUnavailable,
@@ -21,6 +22,7 @@ from roottrace_worker.pipeline.understand.extractor import (
     UnavailableExtractor,
 )
 from roottrace_worker.pipeline.understand.frames import PathMapping
+from roottrace_worker.pipeline.understand.gateway_extractor import GatewayExtractor
 from roottrace_worker.pipeline.understand.stage import (
     UnderstandOutcome,
     preparse,
@@ -37,11 +39,13 @@ __all__ = [
     "FailurePoint",
     "Flag",
     "Frame",
+    "GatewayExtractor",
     "Hypothesis",
     "PathMapping",
     "RetrievalPlan",
     "StructuredExtractor",
     "UnavailableExtractor",
+    "UnderstandExtractionReply",
     "UnderstandOutcome",
     "preparse",
     "understand",

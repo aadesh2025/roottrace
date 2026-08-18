@@ -458,6 +458,21 @@ Five-layer assembly, untrusted-content fencing, tag neutralisation, instruction-
 
 **Accept:** A prompt containing `</untrusted_context>` in the data is escaped. Injection phrases are flagged and recorded on the `llm_calls` row.
 
+**Built.** `apps/worker/roottrace_worker/ai/prompts/{assembly,registry}.py` plus every `.md` file `A2` gives literal text for. See `06` §3.3's implementation note for the full shape.
+
+| Bar | Result |
+|---|---|
+| `</untrusted_context>` in the data is escaped | ✅ `test_a_literal_closing_tag_in_content_is_neutralised` |
+| Injection phrases are flagged and recorded on the `llm_calls` row | ✅ `test_every_suspicious_content_check_writes_a_flagged_llm_calls_row` — fixed two real T5.1 bugs to make this true (see below) |
+
+**Closes `03` §S4's seam left open since T4.1.** `pipeline/understand/gateway_extractor.py`'s `GatewayExtractor` is the real `StructuredExtractor` — `understand/v3.md` assembled with the taxonomy as L2 and the error event as fenced L4, called through the T5.1 gateway, tested end-to-end via `understand(...)` against `FakeProvider`. Not wired to a live investigation yet (no orchestration ticket exists to construct one per investigation with real IDs).
+
+**Two real bugs found in T5.1's gateway, only exposed once this ticket made `flagged_injection_patterns` genuinely non-empty**, both fixed in the same commit: `suspicious_content_detected` was hardcoded `False` on every persisted `llm_calls` row (only the returned `LLMResult` had the real value) — directly contradicted this ticket's own accept criterion; and the output-side echo check rejected immediately instead of retrying once, as `06` §3.2's table specifies. See `06` §3.3's implementation note for both.
+
+A third drift, also fixed here: T5.1's `gateway.py` had hardcoded its own schema-repair instruction text instead of `A2` §9's literal `schema_repair/v1.md` — the registry this ticket builds is what let that be corrected to the real, binding text.
+
+99% coverage on `ai/` + `pipeline/understand` combined.
+
 ### T5.3 Stage 6 — `reason`
 
 Five-step protocol, hypothesis elimination, evidence binding with post-validation, retry-once-then-terminate on binding failure.

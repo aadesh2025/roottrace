@@ -175,12 +175,14 @@ Every prompt lives as a versioned file:
 
 ```
 apps/worker/roottrace_worker/ai/prompts/
+├─ system/        v1.md                 ← current: v1 (shared L1, T5.2 — not in A2 §10's own table)
 ├─ understand/    v1.md  v2.md  v3.md   ← current: v3
 ├─ reason/        v1.md  v2.md  v3.md   ← current: v3
 ├─ patch/         v1.md … v4.md         ← current: v4
 ├─ critique/      v1.md  v2.md          ← current: v2
 ├─ repair/        v1.md                 ← current: v1
 ├─ pr_description/v1.md  v2.md          ← current: v2
+├─ schema_repair/ v1.md                 ← current: v1
 └─ registry.yaml
 ```
 
@@ -192,6 +194,20 @@ Rules:
 - Rolling back a regression is a config change, not a deploy.
 
 Full prompt text is in `appendix/A2-PROMPT-LIBRARY.md`.
+
+#### Implementation note — the prompt system, built at T5.2
+
+`apps/worker/roottrace_worker/ai/prompts/{assembly,registry}.py`, plus every `.md` file `A2` gives literal text for, shipped as content even though only `understand`'s calling code exists yet (`A2` §1: "these are literal — they ship as files"; nothing in `03`/`06` scopes "versioned prompt files" to only the stages with a live caller). `PromptRegistry` loads `registry.yaml` once and serves `.md` content by stage, cached after first read — a file changing on disk mid-run cannot change behaviour mid-investigation.
+
+**`assemble_prompt` produces exactly the `system`/`user` split `RenderedPrompt` already committed to at T5.1**: L1-L3 concatenated into `system`, L4 (fenced, tag-neutralised, injection-flagged) plus L5 (JSON schema + one worked example) into `user`. `detect_injection_patterns` and the `</untrusted_context>` neutralisation are exactly this section's own §3.2 table, and nothing here removes a flagged pattern — flagging without deletion is the whole point (§3.2: "removal would corrupt legitimate source code").
+
+**A real drift, found and fixed in the same ticket.** T5.1's `gateway.py` hardcoded its own schema-repair instruction (a paraphrase, not `A2` §9's literal `schema_repair/v1.md` text) because the prompt registry it should have loaded from didn't exist yet. Once it did, `structured.build_repair_prompt` was changed to take the registry's template and system layer as parameters rather than hardcoding either — one source of truth for that text, not two that could drift apart silently.
+
+**Closes the seam T4.1 left open.** `pipeline/understand/gateway_extractor.py`'s `GatewayExtractor` is `StructuredExtractor`'s real implementation — assembles L2 from `taxonomy.PROFILES` (the exception-family table, unfiltered by language since V1 is Python-only throughout and there is nothing yet to filter *between*), fences `ExtractionRequest`'s fields as L4 (the exception message, pre-parsed frames, breadcrumbs, and request record are all customer-controlled and therefore untrusted, same as retrieved source), and calls `gateway.complete(tier="fast", ..., deterministic=True)`. Tested end-to-end through `understand(...)` against `FakeProvider` — this is the first place in the codebase where retrieval-adjacent code, the prompt system, and the gateway all actually compose, not just each pass their own unit tests in isolation. **Not wired to a real investigation** — the ARQ task that would construct one `GatewayExtractor` per investigation with real IDs does not exist yet; that is pipeline orchestration, out of scope for every ticket built so far.
+
+**Two real bugs in T5.1's own gateway, both found because T5.2 is the first ticket to make `flagged_injection_patterns` genuinely non-empty** — T5.1's tests only ever constructed one by hand, so these paths were exercised but never against a realistic prompt:
+- `suspicious_content_detected` was persisted as `False` on every `llm_calls` row unconditionally, regardless of whether the prompt that produced it had actually been flagged — only the `LLMResult` returned to the caller carried the real value. Directly relevant to this ticket's own accept criterion ("injection phrases are flagged and recorded on the `llm_calls` row"): the row is what "recorded" means, and it was wrong. Fixed by threading the flag into `_record_call`.
+- The output-side check (§3.2's table: "the response is rejected **and retried once**") instead rejected immediately, with no retry at all. Fixed: on a flagged echo, the gateway re-dispatches the same prompt to the same tier once — a real, billed, recorded call — before raising `SuspiciousContentRejectedError` only if the retry also echoes a flagged pattern or fails to parse.
 
 ---
 
