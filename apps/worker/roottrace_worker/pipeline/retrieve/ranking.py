@@ -17,16 +17,22 @@ regardless of their relevance number, priority 9 last regardless of its. The
 two-pass description and this one-pass implementation are equivalent; this
 one is simpler and has no "un-evict" step to get wrong.
 
-**If, after admitting priority 1-4, fewer than 3 distinct files or fewer than
-800 tokens of `in_app` source were admitted, the stage terminates as
-`insufficient_context`** (`03` §S5, verbatim) — `build_context_bundle`
-returns `InsufficientContext` instead of `ContextBundle` in that case, and
-admits nothing further. This is the one place this module makes a decision
-with a real consequence, and it is a mechanical count, never a guess.
+**If, after admitting priority 1-4, no file could be resolved at all, or the
+resolved evidence carries no real content, the stage terminates as
+`insufficient_context`** — `build_context_bundle` returns
+`InsufficientContext` instead of `ContextBundle` in that case, and admits
+nothing further. Originally a literal 3-file/800-token rule (`03` §S5 as
+first written); revised at T4.4 after measuring the corpus showed no fixed
+count could separate a real, thin, self-contained bug from a correctly-
+handled external failure — see `MIN_ADMITTED_FILES`/
+`MIN_ADMITTED_IN_APP_TOKENS` below for the finding and the decision. This is
+the one place this module makes a decision with a real consequence, and it
+is a mechanical check, never a guess.
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -59,8 +65,9 @@ from roottrace_worker.pipeline.retrieve.quality import compute_score
 from roottrace_worker.pipeline.retrieve.tokens import estimate_tokens
 from roottrace_worker.pipeline.understand.contracts import ErrorUnderstanding
 
-#: `03` §S5, hard (P3).
-TOKEN_BUDGET = 24_000
+#: `03` §S5, hard (P3). Operator-overridable per `A3` §"Pipeline" —
+#: `RT_PIPELINE_CONTEXT_TOKEN_BUDGET`, default `24000`, matching this.
+TOKEN_BUDGET = int(os.environ.get("RT_PIPELINE_CONTEXT_TOKEN_BUDGET", "24000"))
 
 #: `03` §S5's five strategy weights.
 STRATEGY_WEIGHT: dict[str, float] = {
@@ -104,8 +111,14 @@ RECENCY_WINDOW_DAYS = 90.0
 #: honestly: did retrieval find the failure point at all, with any real
 #: in-app content, or not. See `03` §S5's implementation note for the full
 #: finding and the coordinator's decision.
-MIN_ADMITTED_FILES = 1
-MIN_ADMITTED_IN_APP_TOKENS = 1
+#:
+#: Operator-overridable per `A3` §"Pipeline" — `RT_PIPELINE_MIN_CONTEXT_FILES`
+#: / `RT_PIPELINE_MIN_CONTEXT_TOKENS`. `A3`'s documented defaults were `3`/
+#: `800` (T4.4's original, corpus-disproven values); corrected to `1`/`1` in
+#: the same commit as this threshold's revision, so a future reader of `A3`
+#: alone is never pointed at the threshold this section just disproved.
+MIN_ADMITTED_FILES = int(os.environ.get("RT_PIPELINE_MIN_CONTEXT_FILES", "1"))
+MIN_ADMITTED_IN_APP_TOKENS = int(os.environ.get("RT_PIPELINE_MIN_CONTEXT_TOKENS", "1"))
 
 #: How many recent commits `history` carries into the bundle. Strategy D
 #: already caps at 10 (`03` §S5: "Last 10 commits"); this is not a second,

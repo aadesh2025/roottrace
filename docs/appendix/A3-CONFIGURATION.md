@@ -123,8 +123,8 @@ A V1 deployment is therefore legitimately `RT_ENVIRONMENT=production` + `RT_DEPL
 | `RT_PIPELINE_CONTEXT_TOKEN_BUDGET` | int | 24000 | **The single largest cost lever** |
 | `RT_PIPELINE_STAGE_TIMEOUT_SECONDS` | json | see `03` §6 | **Hard kill limits only.** Per-stage override map, e.g. `{"reason": 60, "validate": 90}`. These are *not* p95 targets — `03` §6 is canonical for both, and the two columns must never be conflated |
 | `RT_PIPELINE_DEFAULT_COOLDOWN_HOURS` | int | 6 | |
-| `RT_PIPELINE_MIN_CONTEXT_FILES` | int | 3 | Below this → `insufficient_context` |
-| `RT_PIPELINE_MIN_CONTEXT_TOKENS` | int | 800 | In-app source only |
+| `RT_PIPELINE_MIN_CONTEXT_FILES` | int | 1 | Below this → `insufficient_context`. Was `3` before T4.4 measured the corpus and found no fixed count separates a real, thin bug from a correctly-handled external failure — see `03` §S5's implementation note. Judging *fixability* is S6's job now, not this threshold's |
+| `RT_PIPELINE_MIN_CONTEXT_TOKENS` | int | 1 | In-app source only. Was `800`, revised alongside the above for the same reason |
 
 ### Rate limits and quotas
 
