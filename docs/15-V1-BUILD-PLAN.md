@@ -407,6 +407,21 @@ Relevance formula, priority-ordered eviction, 24k hard budget, quality signals, 
 
 **Accept:** Budget is never exceeded across all 25 cases. Priority 1–2 items are never evicted. The two "unfixable" fixtures terminate as `insufficient_context` without proceeding to reasoning.
 
+**Built.** `apps/worker/roottrace_worker/pipeline/retrieve/{ranking,quality,tokens,bundle}.py`. The mechanism is a literal, tested implementation of this section's relevance formula, eviction table, and both output shapes (`ContextBundle` / `InsufficientContext`) — see `03` §S5's implementation note for the two deliberate simplifications (one-pass `(priority, -relevance)` admission instead of a separate eviction pass; a dependency-free, deliberately-overcounting token estimate instead of a provider-specific tokenizer, reasoned the same way `ast` over Tree-sitter was at T4.1–T4.3).
+
+**Three of the four accept numbers are clean. The fourth is not, and it is not a bug this ticket's code should paper over:**
+
+| Bar | Result |
+|---|---|
+| Budget never exceeded across all 25 cases | ✅ 0/25 over |
+| Priority 1–2 items never evicted | ✅ verified directly across every case that reaches ranking |
+| The two controls terminate as `insufficient_context` | ✅ 2/2 |
+| *(everything else proceeds to reasoning)* | ❌ **18 of 23 non-control cases also terminate as `insufficient_context`**, against `expected.final_status: "awaiting_decision"` ground truth for every one of them |
+
+The termination rule, read exactly as written in `03` §S5, mechanically fires on any case where T4.3's four strategies admit fewer than 3 priority-1–4 files or fewer than 800 in-app tokens — and for a single-frame bug whose function calls nothing but stdlib and references no type worth expanding (`key-error-01`, `config-01`, checked by hand), that is *correct, complete* retrieval capped at one file by the shape of the bug, not a retrieval gap. The threshold appears calibrated for a richer retrieval than V1's stated scope (P3 narrow retrieval, 1 hop, strategy C deferred) produces.
+
+**Not fixed by adjusting the threshold.** Per explicit instruction: no number was tuned to make the corpus pass, and no retrieval logic was changed to manufacture extra files. This is where Phase 7 stops — see `docs/PROJECT-STATUS.md` for the full write-up, the exact case list, and the decision this leaves open for the next session.
+
 > **This is the week to move slowly.** Retrieval correctness determines everything downstream. A wrong context produces a confident wrong answer that passes every later gate.
 
 ---

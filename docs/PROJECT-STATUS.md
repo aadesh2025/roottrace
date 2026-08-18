@@ -5,33 +5,49 @@
 > open, and what to pick up next. Deliberately un-numbered so it is never
 > mistaken for part of the frozen contract set.
 >
-> **Last updated:** 2026-08-18, this commit (T4.3, Phase 7 in progress).
+> **Last updated:** 2026-08-18, this commit (T4.4 built; Phase 7 HALTED at
+> the coordinator's own hard-stop condition — see §1 and §5 item 13). Session
+> ran unattended overnight per the coordinator's explicit instructions.
 > Regenerate this from `docs/15-V1-BUILD-PLAN.md` and `git log` — those are the
 > authorities. If this file and `15` disagree, `15` wins.
 
 ---
 
-## 1. Where the build is, in one line
+## 1. Where the build is, in one line — READ THIS FIRST
 
-**Phases 0–6 of 16 are complete, and Phase 7 (retrieval) has three of four
-tickets closed.** The system can accept a production error over HTTP,
-sanitise it, fingerprint it, group it into an issue, score its severity,
-decide whether it deserves a pipeline run, turn it into a structured
-`ErrorUnderstanding` with a retrieval plan, resolve every stack frame in the
-corpus to the real file it came from, and — for the running example — assemble
-frame-direct content, a one-hop call graph, git blame/history, and a
-discovered test, reaching `clients/tax_client.py` (a file no frame, breadcrumb,
-plan, or path resolver names) through call-graph expansion alone. **Nothing
-ranks, deduplicates, or budgets that output yet, and nothing reasons about
-it.** No vector search (deferred to V2 by design), no reasoning, no patch, no
-sandbox, no dashboard.
+**All four Phase 7 tickets (T4.1–T4.4) are built, tested, and committed. Phase
+7 does *not* clear the coordinator's own stated hard-stop condition, and
+nothing has advanced into Phase 8.** Three of T4.4's four acceptance numbers
+are clean (budget never exceeded, priority 1–2 never evicted, both controls
+terminate correctly); the fourth reveals that `03` §S5's `insufficient_context`
+threshold, applied literally to what V1's narrower-by-design retrieval
+produces, also fires on **18 of the 23 non-control corpus cases** — cases
+whose own ground truth (`expected.final_status: "awaiting_decision"`) says
+they should reach reasoning. **No threshold was adjusted and no retrieval
+logic was tuned to make the corpus pass** — per explicit instruction, this was
+stopped and written up instead. Full detail in §5 item 13; this is the thing
+to read before anything else in this file.
 
-**Next:** T4.4 — ranking, the 24,000-token budget, and quality scoring; the
-last ticket of Phase 7. `15` §14 still forbids advancing past Phase 7 until
-retrieval is genuinely good on the fixture set — T4.4 is where the four bars
-`15` §6 states (frame paths, exception family, budget, `insufficient_context`
-termination) become checkable together, and where the coordinator's stated
-hard-stop condition for this phase gets evaluated.
+The system, as built: accept a production error over HTTP, sanitise it,
+fingerprint it, group it into an issue, score its severity, decide whether it
+deserves a pipeline run, turn it into a structured `ErrorUnderstanding` with a
+retrieval plan, resolve every stack frame in the corpus to the real file it
+came from, assemble frame-direct content plus a one-hop call graph plus git
+history plus a discovered test — reaching `clients/tax_client.py` for the
+running example (a file no frame, breadcrumb, plan, or path resolver names)
+through call-graph expansion alone — and rank/dedupe/budget all of that into a
+real `ContextBundle`, or honestly terminate as `insufficient_context` when it
+mechanically should. No vector search (deferred to V2 by design), no
+reasoning, no patch, no sandbox, no dashboard.
+
+**Next, once the calibration question in §5 item 13 is decided:** either
+adjust `03` §S5's threshold (and record why, in the same commit), extend the
+call-graph to 2 hops when budget allows (would help `regression-02`
+specifically, not the composition-root or shared-data cases), or accept that
+V1's narrower retrieval genuinely needs a broader `insufficient_context`
+trigger reserved for cases that look like the two designed controls, not
+every case with a self-contained one-file bug. This is a design decision, not
+an implementation task — resolve it before writing any more code against it.
 
 ---
 
@@ -49,7 +65,7 @@ hard-stop condition for this phase gets evaluated.
 | 4 | FastAPI foundation | T1.5 | ✅ Complete |
 | 5 | Fixture system | T3.1–T3.3 | ✅ Complete |
 | 6 | Ingestion / fingerprinting | T2.1–T2.5 | ⚠️ Complete **except** T2.1's p95 budget and object storage — see §5 |
-| **7** | **Retrieval** | **T4.1–T4.4** | 🔶 **T4.1–T4.3 done; T4.4 next (last ticket of the phase)** |
+| **7** | **Retrieval** | **T4.1–T4.4** | 🛑 **All 4 tickets built; phase HALTED at its own hard-stop — see §5 item 13** |
 | 8 | AI reasoning | T5.1–T5.3 | ⬜ Not started |
 | 9 | Patch generation | T5.4 | ⬜ Not started |
 | 10 | Sandbox validation | T6.1–T6.5 | ⬜ Not started |
@@ -60,18 +76,17 @@ hard-stop condition for this phase gets evaluated.
 | 15 | Evaluation harness | T10.1 | ⬜ Not started |
 | 16 | Dashboard | T8.2–T8.4, T9.1–T9.8 | ⬜ Not started |
 
-**16 tickets closed of 47.** (39 have their own section in `15`; T9.1–T9.8 are
-listed as a table in `15` §11.)
+**17 tickets closed of 47** (T4.4 is the 17th) **, but "closed" here means
+"built to its own literal acceptance criteria," not "cleared Phase 7."** See
+§1. (39 tickets have their own section in `15`; T9.1–T9.8 are listed as a
+table in `15` §11.)
 
-Of the 14 pipeline stages in `03`, **S1–S4 exist in full and S5 exists in
-large part** (`receive`, `fingerprint`, `triage`, `understand`, plus S5's
-frame path resolution and four of five fetch strategies). What S5 is missing:
-strategy C (vector search, deliberately deferred to V2 — the index is never
-populated in V1) and T4.4's ranking, dedup, 24k-token budget, and quality
-scoring — S5 currently returns raw, unranked, unbudgeted candidates. S4's own
-algorithm has an unfilled seam: the LLM structured-extraction step is a
-Protocol with one implementation (`UnavailableExtractor`), pending the gateway
-at T5.1. See §4.
+Of the 14 pipeline stages in `03`, **S1–S5 all exist**, S5 in full: frame
+path resolution, four of five fetch strategies (strategy C deliberately
+deferred to V2 — the index is never populated in V1), and ranking/dedup/budget/
+quality scoring. S4's own algorithm has an unfilled seam: the LLM
+structured-extraction step is a Protocol with one implementation
+(`UnavailableExtractor`), pending the gateway at T5.1. See §4.
 
 ---
 
@@ -92,8 +107,9 @@ at T5.1. See §4.
 | S4 `understand` | Deterministic pre-parse, exception taxonomy (10 families), path resolution cascade steps 1–2, retrieval-plan construction, LLM extraction seam with hostile-reply-safe merge | `apps/worker/tests/test_understand_*.py` (161), `tests/integration/test_understand_corpus.py` (182) |
 | S5 frame path resolution | Cascade steps 3–4 (suffix match, filename search) against a fetched `RepoTree`, monorepo `root_path`/`service_map` scoping as a hard filter, `test_path_mapping`'s resolution logic as a pure function | `apps/worker/tests/test_retrieve_path_resolution.py` (20), `tests/integration/test_retrieve_path_resolution_corpus.py` (27) — **25/25 corpus frame paths resolve** |
 | S5 retrieval strategies A, B, D, E | Frame-direct fetch with `ast`-based function windowing; one-hop call-graph expansion (callees, callers via confirmed `search_symbol` hits, type definitions, import resolution); git blame/recent-commits/release-diff; convention + symbol-grep test discovery. Strategy C stubbed empty (V1 has no code index) | `apps/worker/tests/test_retrieve_ast_index.py` (28), `test_retrieve_import_resolution.py` (10), `test_retrieve_windowing.py` (8), `test_retrieve_strategies.py` (39), `tests/integration/test_retrieve_strategies_corpus.py` (98) — running example retrieves all 4 named files + the introducing commit; 20/23 non-control cases retrieve their own root cause file, the other 3 named and explained (`15` T4.3) |
+| S5 ranking, budget, quality scoring | `(priority, -relevance)` admission against the 24k token budget (dependency-free, deliberately-overcounting estimate); literal `03` §S5 relevance formula; dedup across strategies; `quality.score` (T4.4's own weighted formula, `03`/`06` §S11 consumes it opaquely); `ContextBundle` / `InsufficientContext` as the real, Pydantic S5 output contract | `apps/worker/tests/test_retrieve_tokens.py` (4), `test_retrieve_quality.py` (8), `test_retrieve_ranking.py` (25), `tests/integration/test_retrieve_ranking_corpus.py` (75) — **budget never exceeded (0/25), priority 1–2 never evicted, both controls terminate correctly; 18/23 non-control cases also terminate as `insufficient_context`, against ground truth — see §5 item 13** |
 
-**Test totals:** 1,773 collected — 878 `unit`, 895 `integration`; 220 tests also
+**Test totals:** 1,885 collected — 915 `unit`, 970 `integration`; 220 tests also
 carry the `security` marker. Overall unit coverage **92%** against a ratchet
 of **75**; `pipeline/understand` and `pipeline/retrieve` are at 99% each — both
 clear `14` §10's ≥95% floor for retrieval/fingerprint/scoring code.
@@ -102,8 +118,84 @@ clear `14` §10's ≥95% floor for retrieval/fingerprint/scoring code.
 
 ## 4. Decisions taken in this session
 
-This session covers T4.1, T4.2, and T4.3 — the first three of Phase 7's four
-tickets.
+This session covers all four Phase 7 tickets, T4.1 through T4.4.
+
+### T4.4 — Ranking, budget, quality scoring — and the finding that stopped the phase
+
+**Read this section in full before doing anything else with Phase 7.**
+
+- **The mechanism is a correct, literal implementation of `03` §S5.** The
+  relevance formula (`strategy_weight × recency_factor × proximity_factor ×
+  (1 + 0.15 × symbol_overlap)`), the nine-tier eviction priority, the
+  24,000-token hard budget, and the `insufficient_context` threshold ("fewer
+  than 3 distinct priority 1–4 files or fewer than 800 in-app tokens") are all
+  built as specified, in `apps/worker/roottrace_worker/pipeline/retrieve/
+  {ranking,quality,tokens,bundle}.py`, with 99% coverage on the package
+  (98–100% per file) and 75 corpus-level tests plus 37 unit tests.
+- **No tokenizer dependency**, the same class of decision as `ast` over
+  Tree-sitter (T4.1–T4.3), extended: `06` §2.2 routes every reasoning tier
+  across two providers (Anthropic primary, OpenAI failover, deliberately
+  reversed for the critic), and no single tokenizer is exact for both —
+  Anthropic ships none offline at all. `chars / 3.5`, rounded up, deliberately
+  overcounts rather than aims for average accuracy, since undercounting
+  against a hard ceiling is the unrecoverable failure mode.
+- **Two real bugs were found and fixed while measuring the corpus, both in
+  symbol matching, not in the ranking algorithm itself:**
+  - `symbols_defined` (from `ast_index`) carries qualified names
+    (`"CheckoutService.calculate_total"`); `implicated_symbols`/
+    `should_fetch_by_symbol` (from S4) carry bare names
+    (`"calculate_total"`). A naive equality check between them — which is
+    what the first version of this code did — silently zeroed the
+    symbol-overlap relevance bonus and mis-flagged every resolved method as
+    an "unresolved symbol" gap on any class-based codebase, which this one
+    is throughout. Fixed with `_matches_symbol` (exact match or
+    `qualname.endswith(f".{bare_name}")`), covered by
+    `test_a_qualified_method_name_matches_its_bare_implicated_symbol` as a
+    named regression test.
+  - **Recency was silently a no-op.** `RetrievedFile.blame` is never
+    populated by any T4.3 strategy (blame is attached to the assembled
+    `BundleFile` only for the admitted failure-point entry, downstream of
+    ranking) — so the first version of `_rank_files` read `item.blame`,
+    which was always `None`, making `recency_factor` always `1.0` regardless
+    of how old the introducing commit actually was. Fixed by computing the
+    failure point's blame date *before* ranking and threading it in via
+    `commit_date_by_path`, so `_relevance` sees the real date.
+- **The finding that halted the phase.** Measuring T4.4's own acceptance
+  criteria against the full 25-case corpus:
+
+  | Bar (`15` §6) | Result |
+  |---|---|
+  | Budget never exceeded across all 25 cases | ✅ 0/25 over budget |
+  | Priority 1–2 items never evicted | ✅ verified directly, every case that reaches ranking |
+  | Both controls terminate as `insufficient_context` | ✅ 2/2 (`unfixable-01`, `unfixable-02`) |
+  | *(implicit: everything else proceeds to reasoning)* | ❌ **18 of 23 non-control cases also terminate as `insufficient_context`** |
+
+  Every one of those 18 carries `expected.final_status: "awaiting_decision"`
+  (`14` §6.2) — the corpus's own ground truth says they should reach S6, not
+  abstain. Hand-checked several by reading the actual source
+  (`key-error-01`'s `verify_signature`, `config-01`'s `region_config`):
+  retrieval is not missing anything real. These are single, self-contained
+  functions that call nothing but stdlib and reference no type worth
+  expanding — the bug *is* the whole function, correctly and completely
+  retrieved, and priority 1–4 mechanically tops out at one file because there
+  is genuinely only one file's worth of directly-implicated code. `03` §S5's
+  threshold, read literally, appears calibrated for a retrieval richer than
+  what V1's deliberately narrow scope (P3: retrieve narrowly; strategy B at 1
+  hop; strategy C deferred to V2) is capable of producing for this whole
+  shape of bug.
+  - Exact case list, and the corpus test that keeps it honest rather than
+    silently absorbing drift in either direction:
+    `tests/integration/test_retrieve_ranking_corpus.py::INSUFFICIENT_CONTEXT_ON_FIXABLE_CASES`.
+- **Explicitly not fixed by adjusting the threshold, extending the hop count,
+  or any other change to make the corpus pass.** Per direct instruction: "do
+  not adjust the threshold, do not tune the code to fit this corpus
+  specifically, do not move on anyway." This is a design decision about what
+  `insufficient_context` is *for* in a narrower-than-spec-assumed V1 — not an
+  implementation bug this session is positioned to resolve unilaterally.
+- **Everything that could be verified honestly was.** Coverage floor
+  (`14` §10, ≥95% for retrieval) checked deliberately for `pipeline/retrieve`
+  specifically, not inferred from the general 75% ratchet — same discipline
+  as every phase before this one.
 
 ### T4.3 — Retrieval strategies A, B, D, E
 
@@ -298,8 +390,13 @@ explicitly rejected — that deletes the only signal.
 
 ## 5. Open items, carried forward
 
+**Item 13 is the one that matters this morning — it is the reason Phase 7 is
+halted. Everything else in this table is routine carry-forward, same as any
+other session.**
+
 | # | Item | Owner ticket | Why it is open |
 |---|---|---|---|
+| 13 | 🛑 **`03` §S5's `insufficient_context` threshold, applied literally, wrongly terminates 18/23 fixable corpus cases** | T4.4 → a design decision, not an implementation ticket | See §4 T4.4 above for the full write-up. Budget/priority-eviction/control-termination all measure clean; the fourth T4.4 acceptance number does not. `key-error-01`, `config-01`, and others checked by hand: retrieval is complete and correct for these — a single self-contained function with no callees or type references mechanically produces exactly one priority-1–4 file, and "≥3 distinct files" is definitionally unreachable for that shape of bug. Not adjusted, not tuned around. **Blocks any further Phase 8 work until decided.** Exact case list: `tests/integration/test_retrieve_ranking_corpus.py::INSUFFICIENT_CONTEXT_ON_FIXABLE_CASES`. |
 | 1 | **Refresh-token reuse detection does not work** | T1.4 | Replaying a consumed refresh token returns 200 at `GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL` of both 10 and 0, suggesting 0 means *unlimited* in this build. A stolen refresh token is replayable; `11` T15's mitigation is incomplete. |
 | 2 | **S1 p95 budget not met** | T2.1 | Linux CI: median 28 ms, **p95 226 ms** against a 50 ms target. Bimodal — ~15 samples at 26–33 ms, 5 at 94–230 ms. An unidentified periodic stall, so a real defect rather than platform cost. `xfail(strict=False)` with the numbers in the reason. |
 | 3 | **Object storage (S1 step 8) not implemented** | T2.1 → worker | `payload_url` is null. The `api` holds no credential that can write to Supabase Storage, by the same boot invariant that keeps the service-role key out of it. The archive write belongs to the worker. |
@@ -355,54 +452,60 @@ make fixtures-verify    # ground truth resolved against real code (also in CI)
 
 ## 8. What to continue with
 
-**Phase 7 — retrieval, T4.4 only. T4.1–T4.3 are done.** `15` §6 has the
-acceptance criteria; `03` §S4/§S5 has the contracts. **This is the last
-ticket of the phase**, and the coordinator's stated hard-stop condition
-applies at its end: do not advance into Phase 8 unless the four bars below
-are genuinely met, measured, not adjusted to fit.
+**Phase 7 is built (all four tickets) and HALTED at its own hard-stop
+condition. There is nothing to "continue" inside Phase 7 until item 13 (§5)
+is decided — the retrieval mechanism itself is not what needs work.**
 
 | Ticket | Scope | Status |
 |---|---|---|
 | T4.1 | Stage 4 — `understand` | ✅ Done — `apps/worker/roottrace_worker/pipeline/understand/` |
 | T4.2 | Frame path resolution | ✅ Done — `apps/worker/roottrace_worker/pipeline/retrieve/path_resolution.py`; corpus at 25/25 |
 | T4.3 | Stage 5 — retrieval strategies A, B, D, E | ✅ Done — `apps/worker/roottrace_worker/pipeline/retrieve/strategies.py` |
-| T4.4 | Ranking, budget, and quality scoring | ⬜ Next — last ticket of Phase 7 |
+| T4.4 | Ranking, budget, and quality scoring | ✅ Built, tested, 3/4 acceptance numbers clean — see §5 item 13 for the 4th |
 
-**T4.4 turns `RetrievalCandidates` (T4.3's raw, unranked output) into the real
-`ContextBundle`** (`03` §S5's output contract): the relevance formula
-(`strategy_weight × recency_factor × proximity_factor × symbol_overlap`),
-priority-ordered eviction against the 24,000-token hard budget, deduplication
-across strategies (T4.3 deliberately does none — `services/checkout.py` in
-the running example is currently retrieved once by strategy A, but a case
-where strategy B's caller search rediscovers a file strategy A already fetched
-is expected and untested until T4.4 merges them), the `quality.score` that
-feeds S11's confidence, and the `insufficient_context` termination when
-priority 1–4 leaves fewer than 3 files or 800 tokens of `in_app` source. This
-needs a real tokenizer — nothing built through T4.3 counts tokens.
+**The one decision that unblocks everything else** (§5 item 13, §4's T4.4
+section has the full evidence): `03` §S5's `insufficient_context` threshold —
+"fewer than 3 distinct priority 1–4 files or fewer than 800 in-app tokens" —
+fires correctly on the 2 designed controls, but *also* fires on 18 of 23
+fixable cases whose own ground truth expects them to reach reasoning. This is
+not a retrieval gap (checked by hand against several cases; the code finds
+everything real there is to find) and not something this session judged
+itself entitled to resolve alone, per explicit standing instruction. Plausible
+directions, none chosen:
 
-**T4.4's own acceptance bar (`15` §6):** budget never exceeded across all 25
-cases; priority 1–2 items never evicted; both `unfixable-*` controls terminate
-as `insufficient_context` without proceeding to reasoning. Verify these against
-the fixture corpus the same way T4.1–T4.3 did — measured, not assumed — before
-calling Phase 7 closed.
+1. **Loosen the threshold for V1** specifically, on the reasoning that it was
+   calibrated for a retrieval richer than P3's "narrow, 1-hop, no vector
+   search" scope actually produces — and record *why* in `03` §S5 in the same
+   commit, since the spec is supposed to be binding, not silently
+   reinterpreted.
+2. **Extend strategy B to 2 hops** when the (now-existing) token budget has
+   room — `03` §S5 already allows this ("2 hops only if budget remains").
+   Would close `regression-02` specifically (its root cause is exactly 2 hops
+   away) but not `config-02` or `type-mismatch-03`, which have no call edge to
+   walk at any hop count, and would still leave most of the 18 unaddressed.
+3. **Accept the threshold as-is and treat this as correct, intentional
+   behaviour** — i.e., decide that V1's retrieval genuinely should abstain on
+   any bug this self-contained, and that the corpus's `expected.final_status`
+   for these 18 cases needs revisiting instead of the code. This would be a
+   significant, visible change to what the corpus is asserting and should not
+   be decided without the person who designed the corpus.
 
-**The rule that governs this phase**, from `CLAUDE.md` and `15` §14:
+Whichever direction, the fix belongs in the threshold/corpus layer, not by
+adding retrieval strategies that only exist to manufacture a third file.
+
+**Once decided:** re-run `tests/integration/test_retrieve_ranking_corpus.py`
+(update `INSUFFICIENT_CONTEXT_ON_FIXABLE_CASES` to match whatever the new,
+correct behaviour is) and confirm all four `15` §6 T4.4 bars pass together,
+non-controls proceeding to reasoning included, before treating Phase 7 as
+cleared. Only then does `15` §14's rule apply as a green light rather than a
+red one:
 
 > Do not advance past Phase 7 until it is genuinely good on the fixture set.
-> Everything downstream inherits its errors, and a confident wrong answer built
-> on wrong context passes every later gate.
+> Everything downstream inherits its errors, and a confident wrong answer
+> built on wrong context passes every later gate.
 
-Two things are already in place to make that measurable, and both should be used
-rather than re-derived: the **25-case corpus** with AST-resolved ground truth
-(`fixtures/error-corpus/`, `make fixtures-verify`), and the **fixture GitHub
-client**, which is the only way retrieval reaches code. P3 binds here — retrieve
-narrowly, never wholesale, inside a hard 24,000-token budget with
-priority-ordered eviction.
-
-Nothing in the open-items list blocks T4.4. Items 9 and 11 (family accuracy
-with no margin; three root causes unreachable by T4.3's strategies) are worth
-re-checking once T4.4's budget/eviction exists — a second hop becoming
-affordable within budget could close `regression-02` specifically, though not
-`config-02` or `type-mismatch-03`, which have no call edge to walk at any hop
-count. Neither is T4.4's job to fix; both are worth having in view when
-evaluating the phase's hard-stop numbers at the end of this ticket.
+**What is not blocked:** everything else built this session (T4.1–T4.4's
+mechanisms, the fixed symbol-matching and recency bugs, the corpus tooling)
+is real, tested, and committed regardless of how item 13 resolves — none of
+it needs to be redone, only the threshold/corpus question needs a decision
+before Phase 8 (reasoning, T5.1) can begin.
