@@ -5,15 +5,16 @@
 > open, and what to pick up next. Deliberately un-numbered so it is never
 > mistaken for part of the frozen contract set.
 >
-> **Last updated:** 2026-08-18, this commit (T5.3 — Stage 6 `reason` —
-> built; T5.1's LLM gateway and T5.2's prompt system built earlier the same
-> day; Phase 8's mechanism is now complete, its accuracy bar deferred to
-> `T10.1` by explicit coordinator decision — see §1). T4.4's calibration
-> finding resolved by the coordinator before any of Phase 8; Phase 7
-> cleared first — see §5 item 13. Session ran unattended overnight per the
-> coordinator's explicit instructions, halted at the hard-stop as
-> instructed, resumed with the coordinator's decision, then continued
-> through all of Phase 8 same-day.
+> **Last updated:** 2026-08-18, this commit (T5.4 — Stage 7 `patch` — built;
+> T5.1's LLM gateway, T5.2's prompt system, and T5.3's Stage 6 `reason` all
+> built earlier the same day; Phase 8 (AI reasoning) and Phase 9 (patch
+> generation) are both mechanism-complete, their corpus-wide accuracy bars
+> deferred to `T10.1` by the same coordinator decision applied consistently
+> to both — see §1). T4.4's calibration finding resolved by the coordinator
+> before any of this work; Phase 7 cleared first — see §5 item 13. Session
+> ran unattended overnight per the coordinator's explicit instructions,
+> halted at the hard-stop as instructed, resumed with the coordinator's
+> decision, then continued through Phase 8 and into Phase 9 same-day.
 > Regenerate this from `docs/15-V1-BUILD-PLAN.md` and `git log` — those are the
 > authorities. If this file and `15` disagree, `15` wins.
 
@@ -21,11 +22,13 @@
 
 ## 1. Where the build is, in one line — READ THIS FIRST
 
-**Phase 7 (retrieval) is complete and cleared. Phase 8's mechanism is now
-complete: T5.1 (LLM gateway), T5.2 (prompt system), and T5.3 (Stage 6
-`reason`) are all built, tested, and committed. Phase 8's own accuracy bar
-(`≥20/25` fixtures identify the correct root-cause file) is explicitly
-deferred to `T10.1` — see below. T5.4 (Stage 7 `patch`) is next.**
+**Phase 7 (retrieval) is complete and cleared. Phase 8's mechanism is
+complete (T5.1 LLM gateway, T5.2 prompt system, T5.3 Stage 6 `reason`).
+Phase 9's mechanism is now also complete: T5.4 (Stage 7 `patch`) is built,
+tested, and committed. Both phases' own corpus-wide accuracy bars
+(`≥20/25` root-cause files, `≥24/25` diffs apply cleanly) are explicitly
+deferred to `T10.1` — see below. T6.1 (sandbox container images, Phase 10)
+is next.**
 
 Phase 7's hard-stop condition (§5 item 13) was resolved by the coordinator
 before Phase 8 started: `03` §S5's original `insufficient_context` threshold
@@ -104,6 +107,31 @@ honestly. That measurement stays exactly where `15` already puts it:
 `T10.1`, Phase 15. Nobody should read T5.3 as having already closed this
 bar — see `15` T5.3's own accept-criteria note and §5 item 14 below.
 
+**T5.4, Stage 7 `patch` (`apps/worker/roottrace_worker/pipeline/patch/*`):**
+the third `Structured*` seam (`GatewayPatcher`, mirroring T5.2/T5.3's
+pattern) — assembles a five-layer prompt from S6's `RootCauseAnalysis`
+(specifically `fix_strategy`) plus the `ContextBundle`, calls `LLMGateway`
+on `reasoning-a`, and runs `03` §S7's full "Constraints enforced on the
+output" table deterministically before trusting a reply: an in-memory
+`unidiff`-based apply check against the actual retrieved window (H5) —
+`bundle.files` or, for an existing test file, `bundle.tests.found` — and a
+scope check (H6) covering the `files_to_modify`/regression-test allowlist,
+forbidden CI/lockfile paths, `fix_strategy.must_not_modify`, and existing-
+test deletion. `patch_id`/`base_commit`/`files_changed`/`scope_warning`/
+`model`/`prompt_version`/`tokens` are all either caller-supplied or
+computed by this stage's own code, never trusted from the model's JSON —
+T5.3's rule, extended to every field this ticket can independently know.
+Two registered failure codes rather than one (`RT-AI-0005` scope
+violation, `RT-AI-0006` non-applying diff), both retried once via the same
+second-ladder shape T5.3 introduced. H4 (Tree-sitter symbol existence) is
+**not built** — disclosed, not silently skipped, see §5 item 18. 99%
+coverage on `pipeline/patch` (360 stmts), tested against `FakeProvider`
+plus one live-gated test (`test_patch_live.py`, 5 real fixture cases
+running the full S4→S5→S6→S7 chain) that checks the mechanism does not
+fall over against a real model — **not** an accuracy measurement, same
+explicit deferral as T5.3's, applied consistently: `15` T5.4's
+`≥24/25 diffs apply cleanly` bar is verified at `T10.1`, not here.
+
 The system, as built: accept a production error over HTTP, sanitise it,
 fingerprint it, group it into an issue, score its severity, decide whether it
 deserves a pipeline run, turn it into a structured `ErrorUnderstanding` with a
@@ -111,15 +139,16 @@ retrieval plan, resolve every stack frame in the corpus to the real file it
 came from, assemble frame-direct content plus a one-hop call graph plus git
 history plus a discovered test, rank/dedupe/budget all of that into a real
 `ContextBundle` for all 25 corpus cases, and can now turn any of that into a
-real, structured, cost-accounted, failover-safe LLM call that produces an
-evidence-bound root-cause finding: S4's `understand` and S6's `reason` both
+real, structured, cost-accounted, failover-safe chain of LLM calls that
+produces an evidence-bound root-cause finding **and** an in-memory-verified
+unified diff: S4's `understand`, S6's `reason`, and S7's `patch` all
 genuinely call a model end-to-end (`GatewayExtractor`, `GatewayReasoner`,
-each tested against `FakeProvider` plus one live-gated smoke test), though
-nothing constructs either for a live investigation yet (no orchestration
-ticket exists). No vector search (deferred to V2 by design), no patch, no
-sandbox, no dashboard yet.
+`GatewayPatcher`, each tested against `FakeProvider` plus one live-gated
+smoke test), though nothing constructs any of them for a live investigation
+yet (no orchestration ticket exists). No vector search (deferred to V2 by
+design), no sandbox, no dashboard yet.
 
-**Next:** T5.4 (Stage 7 `patch`) — per `15` §8. See §8.
+**Next:** T6.1 (sandbox container images, Phase 10) — per `15` §8. See §8.
 
 ---
 
@@ -139,7 +168,7 @@ sandbox, no dashboard yet.
 | 6 | Ingestion / fingerprinting | T2.1–T2.5 | ⚠️ Complete **except** T2.1's p95 budget and object storage — see §5 |
 | **7** | **Retrieval** | **T4.1–T4.4** | ✅ **Complete — all 4 tickets built, calibration finding resolved, see §5 item 13** |
 | 8 | AI reasoning | T5.1–T5.3 | 🔶 Mechanism complete — all 3 tickets built; accuracy bar deferred to T10.1, see §5 item 14 |
-| 9 | Patch generation | T5.4 | ⬜ Not started |
+| 9 | Patch generation | T5.4 | 🔶 Mechanism complete — built; accuracy bar deferred to T10.1, see §5 item 19 |
 | 10 | Sandbox validation | T6.1–T6.5 | ⬜ Not started |
 | 11 | Repair loop | T7.1 | ⬜ Not started |
 | 12 | Independent review | T7.2 | ⬜ Not started |
@@ -148,23 +177,24 @@ sandbox, no dashboard yet.
 | 15 | Evaluation harness | T10.1 | ⬜ Not started |
 | 16 | Dashboard | T8.2–T8.4, T9.1–T9.8 | ⬜ Not started |
 
-**20 tickets closed of 47** (T5.3 is the 20th), **Phase 7 cleared, Phase 8's
-mechanism complete** (its accuracy bar deferred to T10.1). See §1. (39
-tickets have their own section in `15`; T9.1–T9.8 are listed as a table in
-`15` §11.)
+**21 tickets closed of 47** (T5.4 is the 21st), **Phase 7 cleared, Phase 8
+and Phase 9 both mechanism-complete** (both accuracy bars deferred to
+T10.1). See §1. (39 tickets have their own section in `15`; T9.1–T9.8 are
+listed as a table in `15` §11.)
 
-Of the 14 pipeline stages in `03`, **S1–S6 all exist**, S5 in full: frame
+Of the 14 pipeline stages in `03`, **S1–S7 all exist**, S5 in full: frame
 path resolution, four of five fetch strategies (strategy C deliberately
 deferred to V2 — the index is never populated in V1), and ranking/dedup/budget/
-quality scoring. **S4's and S6's seams are both closed** — `GatewayExtractor`
-(T5.2) and `GatewayReasoner` (T5.3) are real `StructuredExtractor` /
-`StructuredReasoner` implementations, each assembling the five-layer prompt
+quality scoring. **S4's, S6's, and S7's seams are all closed** —
+`GatewayExtractor` (T5.2), `GatewayReasoner` (T5.3), and `GatewayPatcher`
+(T5.4) are real `StructuredExtractor` / `StructuredReasoner` /
+`StructuredPatcher` implementations, each assembling the five-layer prompt
 (`ai/prompts`, T5.2) and calling `LLMGateway.complete` (T5.1), each tested
 end-to-end against `FakeProvider` plus one live-gated smoke test against a
-real model. What is still missing for either to run against a real
-investigation is orchestration — nothing yet constructs a `GatewayExtractor`
-or `GatewayReasoner` with real IDs and wires S4 → S5 → S6 together for a
-live error (no orchestration ticket exists). See §4.
+real model. What is still missing for any of them to run against a real
+investigation is orchestration — nothing yet constructs a `GatewayExtractor`,
+`GatewayReasoner`, or `GatewayPatcher` with real IDs and wires S4 → S5 → S6
+→ S7 together for a live error (no orchestration ticket exists). See §4.
 
 ---
 
@@ -189,19 +219,105 @@ live error (no orchestration ticket exists). See §4.
 | LLM gateway (T5.1) | `LLMGateway.complete` — provider seam (`Provider` Protocol, real Anthropic/OpenAI SDKs, `FakeProvider` for tests) with tier failover and per-provider retry/backoff; the three-attempt structured-output ladder; exact token/cost accounting from provider-reported usage; the B9 cost-cap circuit breaker (atomic Redis reserve/reconcile); outbound secret redaction; deterministic caching; `llm_calls` persistence via a real `TenantRepository` | `apps/worker/tests/test_ai_*.py`, `tests/integration/test_ai_db_persistence.py` (3, real Postgres), `tests/integration/test_ai_redaction_contract_agreement.py` (2, drift check against `apps/api`'s ingest sanitiser) — **all three `15` T5.1 accept criteria hold** |
 | Prompt system (T5.2) | Five-layer assembly (`ai/prompts/assembly.py`); `<untrusted_context>` fencing with tag neutralisation and instruction-pattern flagging; every `A2`-literal prompt shipped as a versioned `.md` file, loaded through `PromptRegistry`; `GatewayExtractor` — the real `StructuredExtractor`, closing T4.1's seam, tested end-to-end through `understand(...)` against `FakeProvider` | `apps/worker/tests/test_ai_prompts_*.py`, `test_understand_gateway_extractor.py`, `test_understand_extraction_schema.py` — **both `15` T5.2 accept criteria hold; found and fixed two real T5.1 gateway bugs in the process (§4)** |
 | S6 `reason` (T5.3) | `GatewayReasoner` — the real `StructuredReasoner`, closing S6's seam; evidence-binding validator (`validate.py`) enforcing `03` §S6's rule that a claim declaring evidence is dropped whole on any binding failure, while a claim declaring none is kept as speculative; a second, S6-specific correction-retry ladder distinct from T5.1's schema ladder; `model`/`prompt_version`/`tokens` injected from the real `LLMResult`, never model self-report | `apps/worker/tests/test_reason_validate.py` (22), `test_reason_gateway_reasoner.py` (12), `test_reason_stage.py` (5), `test_reason_live.py` (7, live-gated, skipped without `RT_ANTHROPIC_API_KEY`) — mechanism criteria hold (100% evidence validation, fabricated citation rejected); **the corpus-wide `≥20/25` and unfixable-01/02-vs-23 accuracy bars are explicitly deferred to `T10.1`, not verified here — see §1 and §5 item 14** |
+| S7 `patch` (T5.4) | `GatewayPatcher` — the real `StructuredPatcher`, closing S7's seam; `diffing.py`'s in-memory `unidiff`-based apply check (H5) against the actual retrieved window; `validate.py`'s scope check (H6) — allowlist, forbidden CI/lockfile paths, `must_not_modify`, existing-test deletion; two registered failure codes (`RT-AI-0005` scope, `RT-AI-0006` non-applying diff), both retried once; `patch_id`/`base_commit`/`files_changed`/`scope_warning`/`model`/`prompt_version`/`tokens` all caller-supplied or computed, never model self-report | `apps/worker/tests/test_patch_diffing.py` (11), `test_patch_validate.py` (14), `test_patch_gateway_patcher.py` (8), `test_patch_stage.py` (5), `test_patch_live.py` (5, live-gated, skipped without `RT_ANTHROPIC_API_KEY`) — mechanism criteria hold (every constraint-table row exercised, both failure codes fire and retry correctly); H4 (Tree-sitter symbol existence) disclosed as not built, §5 item 18; **the corpus-wide `≥24/25 diffs apply cleanly` bar is explicitly deferred to `T10.1`, not verified here — see §1 and §5 item 19** |
 
-**Test totals:** 2,084 collected — 1,098 `unit`, 986 `integration`; 220 tests
-also carry the `security` marker. Overall unit coverage **93%** against a ratchet
-of **75**; `pipeline/understand`, `pipeline/retrieve`, `pipeline/reason`, and
-`ai/` are all at 98–99% — clearing `14` §10's ≥90%/≥85% pipeline-stage floor
-(the nearest named category — `14` has no dedicated "AI engine" row).
+**Test totals:** 2,127 collected — 1,136 `unit`, 991 `integration`; 220 tests
+also carry the `security` marker. Overall unit coverage **94%** against a ratchet
+of **75**; `pipeline/understand`, `pipeline/retrieve`, `pipeline/reason`,
+`pipeline/patch`, and `ai/` are all at 93–99% — clearing `14` §10's
+≥90%/≥85% pipeline-stage floor (the nearest named category — `14` has no
+dedicated "AI engine" row).
 
 ---
 
 ## 4. Decisions taken in this session
 
-This session covers all four Phase 7 tickets (T4.1–T4.4) and all three of
-Phase 8's tickets, T5.1, T5.2, and T5.3.
+This session covers all four Phase 7 tickets (T4.1–T4.4), all three of
+Phase 8's tickets (T5.1, T5.2, T5.3), and Phase 9's one ticket, T5.4.
+
+### T5.4 — Stage 7 `patch`
+
+**Read `06` §5.1's implementation note alongside this section.**
+
+- **Same two-model split as T5.2/T5.3, extended one field further.**
+  `contracts.py`'s `Patch` (frozen, `extra="forbid"`) is `03` §S7's literal
+  output contract; `extraction_schema.py`'s loose `PatchReply`
+  (`extra="ignore"`) is what the gateway's structured-output ladder
+  validates the model's raw JSON against. T5.3 established that
+  `model`/`prompt_version`/`tokens` never come from the model's own
+  JSON — T5.4 extends that rule to every field this ticket's own code can
+  independently know: `patch_id`/`base_commit` are caller-supplied (same
+  precedent `ranking.build_context_bundle`'s `bundle_id` parameter already
+  set — minting identifiers is an orchestration concern), and
+  `files_changed`/`scope_warning` are computed deterministically from the
+  parsed diff, never trusted from the model. None of the seven have a
+  field on `PatchReply` at all.
+- **`diffing.py` is the literal `03` §S7 line: "we apply it in-memory with
+  `unidiff` before accepting."** `unidiff` parses; it has no built-in
+  apply-to-a-string, so that half is this ticket's own code, walking each
+  hunk's context/removed/added lines against the actual retrieved content
+  rather than trusting the model's line numbers. **A `BundleFile.content`
+  is a window, not the whole file** — a hunk is only checkable when its
+  full source range falls inside the window that was actually retrieved;
+  a hunk reaching outside that window is treated as a failure to apply
+  cleanly, not accepted on faith. Two retrieved-content sources, not one:
+  `bundle.files` (windowed) and `bundle.tests.found` (whole-file, strategy
+  E fetches complete test files) — a diff touching an *existing* test file
+  only has content to check against in the second source.
+- **`validate.py` builds `03` §S7's full "Constraints enforced on the
+  output" table, not a subset.** The allowlist is `fix_strategy.files_to_
+  modify` plus the reply's own declared regression-test path (not a
+  filename-pattern guess at what counts as "a test file"); forbidden paths
+  (`.github/**`, `Dockerfile`, `docker-compose*`, `*.lock`) are checked
+  independent of the allowlist, defense-in-depth; `fix_strategy.
+  must_not_modify` is checked explicitly too, even though it should
+  already be excluded by the allowlist, for the same reason; existing-test
+  deletion covers both a whole-file removal and a `def test_*` line
+  removed with no same-named replacement in the same hunk. The
+  `>60`-line/`>5`-hunk and dependency-manifest checks are warnings
+  (`scope_warning`), not failures — `03`'s own wording is "flagged for
+  human review," not rejected.
+- **Two registered failure codes, not one, and `PatcherUnavailable` carries
+  which applies.** `17` GLOSSARY gives S7 `RT-AI-0005` (scope violation
+  after retry) and `RT-AI-0006` (diff does not apply after retry) — unlike
+  S6's single `RT-AI-0004`, T5.4 needed a place to carry the distinction
+  past the exception boundary, so `PatcherUnavailable.error_code` exists
+  where `ReasonerUnavailable` needed no equivalent field. A required-but-
+  missing regression test is bucketed under `RT-AI-0006` (`03` gives this
+  constraint no third code of its own, and "the patch isn't acceptable as
+  delivered" is closer in kind to a bad diff than to a scope/injection
+  signal); a gateway-level provider exhaustion uses the generic
+  `RT-AI-0001`, unrelated to either of S7's own checks.
+- **No `PatchOutcome` wrapper, unlike `reason.stage.ReasonOutcome`** — a
+  deliberate divergence from T5.3's shape, not an oversight. S6 needed a
+  wrapper because it has two real, differently-shaped terminal states
+  (`RootCauseAnalysis` or a populated `InsufficientContext`); `04`'s
+  `patches` table has no "failed" row at all (every column but two is
+  `not null`), so a terminal S7 failure is not a value to return — it is
+  `PatcherUnavailable` propagating to the caller. Inventing an
+  always-empty failure branch to match T5.3's shape would have been the
+  abstraction `CLAUDE.md` says not to add.
+- **H4 (Tree-sitter symbol existence) is disclosed as not built, not
+  silently skipped.** `06`'s guardrail catalogue names H4 as an S7
+  post-validator, but `03` §S7's own constraint table has no row for it
+  and neither of `15` T5.4's accept criteria requires it. A heuristic
+  AST-based check (reusing `pipeline/retrieve/ast_index.py`) risked
+  false-rejecting correct patches referencing legitimate symbols this
+  codebase has no full-repo index to verify against, with no accept bar
+  actually demanding the check exist. §5 item 18.
+- **Explicit accuracy-bar deferral, the same coordinator decision applied
+  a second time, not re-litigated.** `15` T5.4's `≥24/25 diffs apply
+  cleanly` is a corpus-wide statistical claim over real model output, the
+  same shape as T5.3's `≥20/25` bar, resolved the same way: one live-gated
+  test (`test_patch_live.py`, 5 real fixture cases, skipped without
+  `RT_ANTHROPIC_API_KEY`) running the full S4→S5→S6→S7 chain with a real
+  model, enough to catch a catastrophic mechanism failure before Phase 10
+  (sandbox) is built on top of this stage, explicitly not the accuracy
+  measurement itself. `15` T5.4's own accept-criteria note and §5 item 19
+  now say this explicitly.
+- **99% coverage on `pipeline/patch`** (360 stmts), clearing `14` §10's
+  pipeline-stage floor — checked deliberately, same discipline as every
+  ticket since T4.1.
 
 ### T5.3 — Stage 6 `reason`
 
@@ -775,6 +891,8 @@ as any other session.**
 | 15 | **No orchestration constructs a live `GatewayExtractor`/`LLMGateway`, and no `Settings`-driven factory exists to build one** | T5.1/T5.2 → wherever first runs a real investigation | `apps/worker/roottrace_worker/settings.py` declares every field the gateway needs (API keys, cache TTL, cost caps); `gateway.py`/`GatewayExtractor` take them all as constructor arguments. Every current caller (all of them tests) constructs both directly with explicit providers/routing/storage/db/redis objects and a hand-picked `project_id`. T5.2 proved the *mechanism* works end-to-end against `FakeProvider` — what is still missing is (a) a factory that builds a real `LLMGateway` from `Settings` with real `psycopg`/`redis` connections, and (b) the ARQ task that would construct a `GatewayExtractor` per investigation with real IDs and call `understand(event, extractor=...)` for an actual error. Neither exists yet; both are pipeline orchestration, out of scope for every ticket built so far. |
 | 16 | **No provider-health circuit breaker** | T5.1 → undecided | `06` §2.4's responsibilities table names one ("opens ... when a provider exceeds its error threshold"), independent of the B9 cost-cap breaker (built). No section gives it an algorithm the way §8.2a gives the cost breaker one, so nothing was built against a guess. `_dispatch_tier` walks the configured tier order fresh on every call with no memory of a provider's recent failures. |
 | 17 | **No provider-side prompt caching** | T5.1/T5.2 → undecided | `06` §2.4/§3.1 name provider-native caching of the static L1-L3 prompt layers (Anthropic `cache_control`, OpenAI automatic caching) as a cost/latency optimisation, distinct from the *deterministic* content-hash cache (built, `ai/cache.py`). T5.2's `assemble_prompt` builds the L1-L5 split *conceptually* (`system`/`domain`/`task` are separate parameters), but the layers are concatenated into one flat `system` string before reaching `RenderedPrompt` — a provider call has no way to mark only the static L1-L3 span cacheable from a single string. Closing this needs `RenderedPrompt`/`ProviderRequest` to carry structured, per-layer content blocks, not just two flat strings; not attempted here since no ticket has scoped that shape change yet. |
+| 18 | **H4 (Tree-sitter symbol existence) is not built for S7** | T5.4 → undecided | `06` §5's guardrail catalogue names H4 as an S7 post-validator ("invented function/class names"), but `03` §S7's own "Constraints enforced on the output" table has no row for it, and neither of `15` T5.4's own accept criteria requires it. A heuristic AST-based check (reusing `pipeline/retrieve/ast_index.py`) risked false-rejecting correct patches referencing legitimate stdlib/third-party symbols with no accept bar actually demanding the check exist — built noisily seemed worse than disclosed and deferred. H5 (diff applicability) and H6 (scope enforcement), the other two S7 guardrails `06` names, are both built and tested. |
+| 19 | 🔶 **S7's `≥24/25 diffs apply cleanly` accuracy bar is mechanism-verified at T5.4, not yet measured against real model behaviour** | T5.4 → T10.1 | `GatewayPatcher`'s in-memory diff-apply check and scope validator are built and tested against `FakeProvider` — every constraint-table row is exercised, both registered failure codes fire and retry correctly, and one live-gated smoke test (`test_patch_live.py`, 5 real fixture cases through the full S4→S5→S6→S7 chain) confirms the mechanism runs against a real model without falling over. **`15` T5.4's `≥24/25 diffs apply cleanly` corpus-wide statistical claim has not been measured against real model behaviour across the full corpus.** That measurement is `T10.1`'s job (Phase 15, full 25-case corpus, 3 runs), by the same coordinator decision recorded for item 14/T5.3, applied consistently here. Do not close this item until T10.1 runs. |
 
 ---
 
@@ -819,9 +937,10 @@ make fixtures-verify    # ground truth resolved against real code (also in CI)
 ## 8. What to continue with
 
 **Phase 7 is complete and cleared (all four tickets, item 13 resolved — see
-§5). Phase 8's mechanism is complete: T5.1, T5.2, and T5.3 are all done; its
-accuracy bar is explicitly deferred to `T10.1` (§5 item 14). T5.4 (`15` §8,
-Stage 7 `patch`) is next.**
+§5). Phase 8 and Phase 9 are both mechanism-complete: T5.1 through T5.4 are
+all done; both phases' accuracy bars are explicitly deferred to `T10.1`
+(§5 items 14 and 19). T6.1 (`15` §8, sandbox container images, Phase 10)
+is next.**
 
 | Ticket | Scope | Status |
 |---|---|---|
@@ -832,20 +951,19 @@ Stage 7 `patch`) is next.**
 | T5.1 | LLM gateway | ✅ Done — `apps/worker/roottrace_worker/ai/*.py`; all 3 accept bars clean; see §4's T5.1 section and §5 items 16–17 for disclosed gaps |
 | T5.2 | Prompt system | ✅ Done — `apps/worker/roottrace_worker/ai/prompts/*`; both accept bars clean; closed §5 item 8; see §4's T5.2 section for the two T5.1 bugs it found and fixed |
 | T5.3 | Stage 6 — `reason` | 🔶 Mechanism done — `apps/worker/roottrace_worker/pipeline/reason/*`; 99% coverage; **corpus-wide accuracy bar (`≥20/25`, unfixable split) explicitly deferred to `T10.1`, not verified here — see §4's T5.3 section and §5 item 14** |
+| T5.4 | Stage 7 — `patch` | 🔶 Mechanism done — `apps/worker/roottrace_worker/pipeline/patch/*`; 99% coverage; two of three accept criteria (forbidden-path, regression-test) verified deterministically; **`≥24/25` diffs-apply-cleanly bar explicitly deferred to `T10.1`, not verified here — see §4's T5.4 section and §5 item 19** |
 
-**T5.4 — Stage 7 `patch`** (`15` §8, next): read `03` §S7 and `A2` §5 in
-full before starting, same discipline as every prior ticket. S7 takes S6's
-`RootCauseAnalysis` (specifically `fix_strategy`) and produces an actual
-unified diff against the files S6 named — this is where `files_to_modify`
-⊆ retrieved paths (already enforced at S6) starts to matter operationally,
-since S7 can only patch content that was actually retrieved into the
-bundle. Expect another `Structured*` seam following the `StructuredExtractor`
-/ `StructuredReasoner` pattern (a `StructuredPatcher` or similar), another
-two-Pydantic-model contract split, and `patch/v4.md` (already shipped
-verbatim at T5.2) as its prompt text. P1 ("nothing reaches a human without
-proof") means S7's output is still just a hypothesis — the sandbox gates
-(Phase 10) are what prove a patch, not S7 itself; do not let T5.4 grow gate
-logic it isn't scoped to have.
+**T6.1 — Container images** (`15` §8, next, Phase 10): read `07-SANDBOX-
+VALIDATION.md` in full before starting — `CLAUDE.md` calls this out
+explicitly ("read the whole thing before touching it"). `roottrace/
+sandbox-python:3.12` with a warmed wheel cache and a pinned analysis
+toolchain, digest-pinned base, Trivy-scanned. Accept: the image builds
+reproducibly, and the synthetic repo's dependencies install fully offline
+— the sandbox's hard "no network" invariant (`CLAUDE.md` non-negotiables)
+starts to matter from this ticket onward. P1 ("nothing reaches a human
+without proof") is what the next five tickets (T6.1–T6.5, the nine gates)
+exist to satisfy — S7's diff is still just a hypothesis until it survives
+them.
 
 **Standing rules that still apply:** finish each ticket's acceptance
 criteria before starting the next; commit and push after each ticket

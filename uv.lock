@@ -968,6 +968,7 @@ dev = [
     { name = "roottrace-worker" },
     { name = "ruff" },
     { name = "types-pyyaml" },
+    { name = "types-unidiff" },
 ]
 
 [package.metadata]
@@ -988,6 +989,7 @@ dev = [
     { name = "roottrace-worker", editable = "apps/worker" },
     { name = "ruff", specifier = ">=0.16,<0.17" },
     { name = "types-pyyaml", specifier = ">=6.0,<7.0" },
+    { name = "types-unidiff", specifier = ">=0.7,<1.0" },
 ]
 
 [[package]]
@@ -1040,6 +1042,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pyyaml" },
     { name = "redis" },
+    { name = "unidiff" },
 ]
 
 [package.metadata]
@@ -1052,6 +1055,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.7,<3.0" },
     { name = "pyyaml", specifier = ">=6.0,<7.0" },
     { name = "redis", specifier = ">=5.2,<7.0" },
+    { name = "unidiff", specifier = ">=0.7,<1.0" },
 ]
 
 [[package]]
@@ -1168,6 +1172,15 @@ wheels = [
 ]
 
 [[package]]
+name = "types-unidiff"
+version = "0.7.0.20260727"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/38/cf/068d576b6341aa20e3e212f4db8c06f52bebf86a2a15379678bd58241df0/types_unidiff-0.7.0.20260727.tar.gz", hash = "sha256:a0211facb7fe4a25d809bd2e24824bb93fc27f25ded9541bbd71d533b5e00f8c", size = 8251, upload-time = "2026-07-27T05:36:29.226Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3e/65/705a75b399c8b79cf8ea53c562fb882b58f20020d772992cea678aa69ce4/types_unidiff-0.7.0.20260727-py3-none-any.whl", hash = "sha256:20e14049a3bd02109085a97dd3e0f2348ecc0cf137c097c96a42c9850671c032", size = 9327, upload-time = "2026-07-27T05:36:28.452Z" },
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1195,6 +1208,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/92/ff/5a28bdfd8c3ebec42564ac7d0e54ca3db65044a9314a97f9564fa7a1e926/tzdata-2026.3.tar.gz", hash = "sha256:4a1518b8993086a7982523e071643f3c0e5f213e75b21318e78bcabfff9d1415", size = 198674, upload-time = "2026-07-10T08:50:37.887Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e5/6d/b53b99a9f2766d095985947a5782f1702cabb129a34f7a802d7197af832f/tzdata-2026.3-py2.py3-none-any.whl", hash = "sha256:dc096730c87af6cab1b171c9d532be840741ff5d459015e7f6947bd7d7e54931", size = 348168, upload-time = "2026-07-10T08:50:36.46Z" },
+]
+
+[[package]]
+name = "unidiff"
+version = "0.7.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/48/81be0ac96e423a877754153699731ef439fd7b80b4c8b5425c94ed079ebd/unidiff-0.7.5.tar.gz", hash = "sha256:2e5f0162052248946b9f0970a40e9e124236bf86c82b70821143a6fc1dea2574", size = 20931, upload-time = "2023-03-10T01:05:39.185Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8a/54/57c411a6e8f7bd7848c8b66e4dcaffa586bf4c02e63f2280db0327a4e6eb/unidiff-0.7.5-py2.py3-none-any.whl", hash = "sha256:c93bf2265cc1ba2a520e415ab05da587370bc2a3ae9e0414329f54f0c2fc09e8", size = 14386, upload-time = "2023-03-10T01:05:36.594Z" },
 ]
 
 [[package]]

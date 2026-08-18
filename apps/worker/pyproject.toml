@@ -29,6 +29,9 @@ dependencies = [
   # direct REST call against Supabase Storage rather than the `supabase-py`
   # SDK, which pulls in gotrue/postgrest/realtime/storage3 for one PUT.
   "httpx>=0.28,<1.0",
+  # S7 patch (T5.4) — `03` §S7 names this library literally: "We apply it
+  # in-memory with `unidiff` before accepting."
+  "unidiff>=0.7,<1.0",
 ]
 
 [build-system]

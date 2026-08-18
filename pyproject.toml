@@ -60,6 +60,8 @@ dev = [
   "httpx>=0.28",
   # mypy --strict stub for T5.1's `ai/routing.py` (`yaml.safe_load`).
   "types-PyYAML>=6.0,<7.0",
+  # mypy --strict stub for T5.4's `pipeline/patch/diffing.py` (`unidiff`).
+  "types-unidiff>=0.7,<1.0",
 ]
 
 # ── ruff ───────────────────────────────────────────────────────────────────
@@ -124,6 +126,10 @@ ignore = [
 # names S4's and `TransportUnavailable` names the GitHub gateway's — one
 # idea, three seams, deliberately spelled the same way.
 "apps/worker/roottrace_worker/pipeline/reason/reasoner.py" = ["N818"]
+# A fourth instance of the same `XUnavailable` symmetry: `PatcherUnavailable`
+# names the S7 seam the way the three above name S4, S6, and the GitHub
+# gateway's.
+"apps/worker/roottrace_worker/pipeline/patch/patcher.py" = ["N818"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"
