@@ -119,6 +119,11 @@ ignore = [
 # the first time; renaming its exception for a style rule would put the code
 # out of step with the one security doc that names it.
 "apps/worker/roottrace_worker/ai/db.py" = ["N818"]
+# A third instance of the same `XUnavailable` symmetry as line 111 above:
+# `ReasonerUnavailable` names the S6 seam the way `ExtractorUnavailable`
+# names S4's and `TransportUnavailable` names the GitHub gateway's — one
+# idea, three seams, deliberately spelled the same way.
+"apps/worker/roottrace_worker/pipeline/reason/reasoner.py" = ["N818"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"

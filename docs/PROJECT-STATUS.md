@@ -5,13 +5,15 @@
 > open, and what to pick up next. Deliberately un-numbered so it is never
 > mistaken for part of the frozen contract set.
 >
-> **Last updated:** 2026-08-18, this commit (T5.2 — the prompt system —
-> built; T5.1's LLM gateway built earlier the same day; Phase 8 underway.
-> T4.4's calibration finding resolved by the coordinator before either;
-> Phase 7 cleared first — see §1 and §5 item 13). Session ran unattended
-> overnight per the coordinator's explicit instructions, halted at the
-> hard-stop as instructed, resumed with the coordinator's decision, then
-> continued into Phase 8 same-day.
+> **Last updated:** 2026-08-18, this commit (T5.3 — Stage 6 `reason` —
+> built; T5.1's LLM gateway and T5.2's prompt system built earlier the same
+> day; Phase 8's mechanism is now complete, its accuracy bar deferred to
+> `T10.1` by explicit coordinator decision — see §1). T4.4's calibration
+> finding resolved by the coordinator before any of Phase 8; Phase 7
+> cleared first — see §5 item 13. Session ran unattended overnight per the
+> coordinator's explicit instructions, halted at the hard-stop as
+> instructed, resumed with the coordinator's decision, then continued
+> through all of Phase 8 same-day.
 > Regenerate this from `docs/15-V1-BUILD-PLAN.md` and `git log` — those are the
 > authorities. If this file and `15` disagree, `15` wins.
 
@@ -19,9 +21,11 @@
 
 ## 1. Where the build is, in one line — READ THIS FIRST
 
-**Phase 7 (retrieval) is complete and cleared. Phase 8 is underway: T5.1
-(LLM gateway) and T5.2 (prompt system) are both built, tested, and
-committed; T5.3 (Stage 6 `reason`) is next.**
+**Phase 7 (retrieval) is complete and cleared. Phase 8's mechanism is now
+complete: T5.1 (LLM gateway), T5.2 (prompt system), and T5.3 (Stage 6
+`reason`) are all built, tested, and committed. Phase 8's own accuracy bar
+(`≥20/25` fixtures identify the correct root-cause file) is explicitly
+deferred to `T10.1` — see below. T5.4 (Stage 7 `patch`) is next.**
 
 Phase 7's hard-stop condition (§5 item 13) was resolved by the coordinator
 before Phase 8 started: `03` §S5's original `insufficient_context` threshold
@@ -62,22 +66,60 @@ hardcoded paraphrase, not `A2` §9's literal, binding text. 99% coverage on
 `ai/` + `pipeline/understand` combined. Full detail in §4's T5.1/T5.2
 sections.
 
+**T5.3, Stage 6 `reason` (`apps/worker/roottrace_worker/pipeline/reason/*`):**
+the second `StructuredReasoner` seam (mirroring T4.1/T5.2's `understand`
+pattern) — `GatewayReasoner` assembles a full five-layer prompt from a
+`ContextBundle` plus `ErrorUnderstanding`, calls `LLMGateway` on the
+`reasoning-a` tier, and validates every claim in the reply against `03`
+§S6's evidence-binding rule before it's trusted: a reasoning step or
+eliminated hypothesis with **no declared evidence** is kept as-is
+(speculative, matches `03`'s own worked example); one that **declares**
+evidence and gets **any** of it wrong is **dropped entirely**, not
+partially. `fix_strategy.files_to_modify` is filtered to retrieved paths.
+A second, S6-specific retry ladder — distinct from T5.1's JSON-schema
+ladder — re-dispatches once with a correction prompt quoting the model's
+own prior reply when the primary root-cause finding (a surviving
+`conclude` step plus a grounded `fix_strategy`) fails to bind; a second
+failure terminates the investigation as `insufficient_context` via
+`ReasonerUnavailable`, reusing `retrieve.bundle.InsufficientContext` as
+S6's terminal shape rather than inventing a stage-specific one.
+`model`/`prompt_version`/`tokens` on the trusted `RootCauseAnalysis` are
+injected from the real `LLMResult` the gateway returns, never taken from
+the model's own JSON self-report. 99% coverage on `pipeline/reason`
+(344 stmts), tested against `FakeProvider` for the mechanism (evidence
+binding, the retry ladder, a deliberately fabricated citation rejected)
+plus one live-gated test (`test_reason_live.py`, 7 real fixture cases,
+skipped without `RT_ANTHROPIC_API_KEY`) that checks the mechanism does not
+fall over against a real model — **not** an accuracy measurement.
+
+**Explicit accuracy-bar deferral, by coordinator decision:** `15` T5.3's
+two corpus-wide statistical accept criteria — `≥20/25` fixtures identify
+the correct root-cause file, and `unfixable-01`/`unfixable-02` terminate as
+`insufficient_context` while the other 23 proceed — are **not** verified by
+T5.3. T5.3 proves the mechanism runs correctly (evidence binding holds,
+fabrication is rejected, the retry ladder works, a real model call doesn't
+crash it); it does not prove the `≥20/25` number, which needs the full
+25-case corpus, multiple runs, and a real evaluation harness to measure
+honestly. That measurement stays exactly where `15` already puts it:
+`T10.1`, Phase 15. Nobody should read T5.3 as having already closed this
+bar — see `15` T5.3's own accept-criteria note and §5 item 14 below.
+
 The system, as built: accept a production error over HTTP, sanitise it,
 fingerprint it, group it into an issue, score its severity, decide whether it
 deserves a pipeline run, turn it into a structured `ErrorUnderstanding` with a
 retrieval plan, resolve every stack frame in the corpus to the real file it
 came from, assemble frame-direct content plus a one-hop call graph plus git
 history plus a discovered test, rank/dedupe/budget all of that into a real
-`ContextBundle` for all 25 corpus cases — and can now turn any of that into a
-real, structured, cost-accounted, failover-safe LLM call: S4's `understand`
-stage can genuinely call a model end-to-end (`GatewayExtractor`, tested
-against `FakeProvider`), though nothing constructs one for a live
-investigation yet (no orchestration ticket exists). S6 (`reason`) already
-has its prompt text shipped (`reason/v3.md`, T5.2) but no output contract
-and no calling code. No vector search (deferred to V2 by design), no
-reasoning, no patch, no sandbox, no dashboard yet.
+`ContextBundle` for all 25 corpus cases, and can now turn any of that into a
+real, structured, cost-accounted, failover-safe LLM call that produces an
+evidence-bound root-cause finding: S4's `understand` and S6's `reason` both
+genuinely call a model end-to-end (`GatewayExtractor`, `GatewayReasoner`,
+each tested against `FakeProvider` plus one live-gated smoke test), though
+nothing constructs either for a live investigation yet (no orchestration
+ticket exists). No vector search (deferred to V2 by design), no patch, no
+sandbox, no dashboard yet.
 
-**Next:** T5.3 (Stage 6 `reason`) — per `15` §7. See §8.
+**Next:** T5.4 (Stage 7 `patch`) — per `15` §8. See §8.
 
 ---
 
@@ -96,7 +138,7 @@ reasoning, no patch, no sandbox, no dashboard yet.
 | 5 | Fixture system | T3.1–T3.3 | ✅ Complete |
 | 6 | Ingestion / fingerprinting | T2.1–T2.5 | ⚠️ Complete **except** T2.1's p95 budget and object storage — see §5 |
 | **7** | **Retrieval** | **T4.1–T4.4** | ✅ **Complete — all 4 tickets built, calibration finding resolved, see §5 item 13** |
-| 8 | AI reasoning | T5.1–T5.3 | 🔶 In progress — T5.1/T5.2 done, T5.3 not started |
+| 8 | AI reasoning | T5.1–T5.3 | 🔶 Mechanism complete — all 3 tickets built; accuracy bar deferred to T10.1, see §5 item 14 |
 | 9 | Patch generation | T5.4 | ⬜ Not started |
 | 10 | Sandbox validation | T6.1–T6.5 | ⬜ Not started |
 | 11 | Repair loop | T7.1 | ⬜ Not started |
@@ -106,21 +148,23 @@ reasoning, no patch, no sandbox, no dashboard yet.
 | 15 | Evaluation harness | T10.1 | ⬜ Not started |
 | 16 | Dashboard | T8.2–T8.4, T9.1–T9.8 | ⬜ Not started |
 
-**19 tickets closed of 47** (T5.2 is the 19th), **Phase 7 cleared, Phase 8
-underway.** See §1. (39 tickets have their own section in `15`; T9.1–T9.8
-are listed as a table in `15` §11.)
+**20 tickets closed of 47** (T5.3 is the 20th), **Phase 7 cleared, Phase 8's
+mechanism complete** (its accuracy bar deferred to T10.1). See §1. (39
+tickets have their own section in `15`; T9.1–T9.8 are listed as a table in
+`15` §11.)
 
-Of the 14 pipeline stages in `03`, **S1–S5 all exist**, S5 in full: frame
+Of the 14 pipeline stages in `03`, **S1–S6 all exist**, S5 in full: frame
 path resolution, four of five fetch strategies (strategy C deliberately
 deferred to V2 — the index is never populated in V1), and ranking/dedup/budget/
-quality scoring. **S4's seam is closed** — `GatewayExtractor` (T5.2) is a
-real `StructuredExtractor` implementation, assembling the five-layer prompt
-(`ai/prompts`, T5.2) and calling `LLMGateway.complete` (T5.1), tested
-end-to-end against `FakeProvider`. What is still missing for S4 to run
-against a real investigation is orchestration — nothing yet constructs a
-`GatewayExtractor` with real IDs and calls `understand(event,
-extractor=...)` for a live error. S6 (`reason`, T5.3) has no prompt
-integration, no output contract, and no code yet. See §4.
+quality scoring. **S4's and S6's seams are both closed** — `GatewayExtractor`
+(T5.2) and `GatewayReasoner` (T5.3) are real `StructuredExtractor` /
+`StructuredReasoner` implementations, each assembling the five-layer prompt
+(`ai/prompts`, T5.2) and calling `LLMGateway.complete` (T5.1), each tested
+end-to-end against `FakeProvider` plus one live-gated smoke test against a
+real model. What is still missing for either to run against a real
+investigation is orchestration — nothing yet constructs a `GatewayExtractor`
+or `GatewayReasoner` with real IDs and wires S4 → S5 → S6 together for a
+live error (no orchestration ticket exists). See §4.
 
 ---
 
@@ -144,19 +188,88 @@ integration, no output contract, and no code yet. See §4.
 | S5 ranking, budget, quality scoring | `(priority, -relevance)` admission against the 24k token budget (dependency-free, deliberately-overcounting estimate); literal `03` §S5 relevance formula; dedup across strategies; `quality.score` (T4.4's own weighted formula, `03`/`06` §S11 consumes it opaquely); `ContextBundle` / `InsufficientContext` as the real, Pydantic S5 output contract; `insufficient_context` threshold revised (§5 item 13) to judge "did retrieval find real content," not fixability | `apps/worker/tests/test_retrieve_tokens.py` (4), `test_retrieve_quality.py` (8), `test_retrieve_ranking.py` (25), `tests/integration/test_retrieve_ranking_corpus.py` (77) — **budget never exceeded (0/25), priority 1–2 never evicted, all 25 corpus cases (including both controls) correctly reach a `ContextBundle` — see §5 item 13 for the fixability question this defers to S6** |
 | LLM gateway (T5.1) | `LLMGateway.complete` — provider seam (`Provider` Protocol, real Anthropic/OpenAI SDKs, `FakeProvider` for tests) with tier failover and per-provider retry/backoff; the three-attempt structured-output ladder; exact token/cost accounting from provider-reported usage; the B9 cost-cap circuit breaker (atomic Redis reserve/reconcile); outbound secret redaction; deterministic caching; `llm_calls` persistence via a real `TenantRepository` | `apps/worker/tests/test_ai_*.py`, `tests/integration/test_ai_db_persistence.py` (3, real Postgres), `tests/integration/test_ai_redaction_contract_agreement.py` (2, drift check against `apps/api`'s ingest sanitiser) — **all three `15` T5.1 accept criteria hold** |
 | Prompt system (T5.2) | Five-layer assembly (`ai/prompts/assembly.py`); `<untrusted_context>` fencing with tag neutralisation and instruction-pattern flagging; every `A2`-literal prompt shipped as a versioned `.md` file, loaded through `PromptRegistry`; `GatewayExtractor` — the real `StructuredExtractor`, closing T4.1's seam, tested end-to-end through `understand(...)` against `FakeProvider` | `apps/worker/tests/test_ai_prompts_*.py`, `test_understand_gateway_extractor.py`, `test_understand_extraction_schema.py` — **both `15` T5.2 accept criteria hold; found and fixed two real T5.1 gateway bugs in the process (§4)** |
+| S6 `reason` (T5.3) | `GatewayReasoner` — the real `StructuredReasoner`, closing S6's seam; evidence-binding validator (`validate.py`) enforcing `03` §S6's rule that a claim declaring evidence is dropped whole on any binding failure, while a claim declaring none is kept as speculative; a second, S6-specific correction-retry ladder distinct from T5.1's schema ladder; `model`/`prompt_version`/`tokens` injected from the real `LLMResult`, never model self-report | `apps/worker/tests/test_reason_validate.py` (22), `test_reason_gateway_reasoner.py` (12), `test_reason_stage.py` (5), `test_reason_live.py` (7, live-gated, skipped without `RT_ANTHROPIC_API_KEY`) — mechanism criteria hold (100% evidence validation, fabricated citation rejected); **the corpus-wide `≥20/25` and unfixable-01/02-vs-23 accuracy bars are explicitly deferred to `T10.1`, not verified here — see §1 and §5 item 14** |
 
-**Test totals:** 2,037 collected — 1,060 `unit`, 977 `integration`; 220 tests
+**Test totals:** 2,084 collected — 1,098 `unit`, 986 `integration`; 220 tests
 also carry the `security` marker. Overall unit coverage **93%** against a ratchet
-of **75**; `pipeline/understand`, `pipeline/retrieve`, and `ai/` are all at
-98–99% — clearing `14` §10's ≥90%/≥85% pipeline-stage floor (the nearest
-named category — `14` has no dedicated "AI engine" row).
+of **75**; `pipeline/understand`, `pipeline/retrieve`, `pipeline/reason`, and
+`ai/` are all at 98–99% — clearing `14` §10's ≥90%/≥85% pipeline-stage floor
+(the nearest named category — `14` has no dedicated "AI engine" row).
 
 ---
 
 ## 4. Decisions taken in this session
 
-This session covers all four Phase 7 tickets (T4.1–T4.4) and Phase 8's
-first two tickets, T5.1 and T5.2.
+This session covers all four Phase 7 tickets (T4.1–T4.4) and all three of
+Phase 8's tickets, T5.1, T5.2, and T5.3.
+
+### T5.3 — Stage 6 `reason`
+
+**Read `06` §6.4's implementation note alongside this section.**
+
+- **Two-Pydantic-model split, same pattern as T5.2's `understand`
+  contracts.** `contracts.py`'s `RootCauseAnalysis` (frozen, `extra="forbid"`)
+  is the trusted, post-validation shape; `extraction_schema.py`'s loose
+  `ReasonReply` (`extra="ignore"`) is what the gateway's structured-output
+  ladder validates the model's raw JSON against. `ReasonReply` deliberately
+  has no `model`/`prompt_version`/`tokens` fields at all — see below.
+- **Evidence-binding validator (`validate.py`) implements H1/H2 and S6's
+  half of H3 for real**, not schema validation standing in for them, per
+  `06` §4.2's S6 semantic-validator row. Two rules, both taken directly from
+  `03` §S6's worked example rather than invented: a reasoning step or
+  eliminated hypothesis that declares **zero** evidence is valid and kept
+  unconditionally (the worked example's own `hypothesise` step has no
+  `evidence` key — speculative, not yet grounded, not thereby invalid); a
+  step that **declares** evidence and gets **any** of it wrong is dropped
+  **entirely**, not partially — a claim partly grounded in a fabrication is
+  not a claim worth keeping partially. `fix_strategy.files_to_modify` is
+  filtered to paths actually present in `bundle.files`.
+- **"The primary root-cause finding"** — the thing `03` §S6 says gates the
+  retry-once-then-terminate ladder — is operationalised as: at least one
+  surviving `conclude`-type step bound to real evidence, **and**
+  `fix_strategy.files_to_modify` ⊆ retrieved paths. Both required; either
+  failing triggers the correction retry.
+- **A second, S6-specific retry ladder, architecturally distinct from
+  T5.1's schema-repair ladder.** T5.1's gateway retries only on JSON-schema
+  violation, domain-free. `GatewayReasoner` adds a semantic ladder of its
+  own — on evidence-binding failure it re-dispatches the exact same tier
+  once with a correction prompt (`_CORRECTION_PREAMBLE`, self-authored;
+  `A2` has no literal text for this, only for JSON-malformation repair)
+  that quotes the model's own prior reply and states specifically what
+  failed to bind. One retry only; a second failure raises
+  `ReasonerUnavailable`, added as the third instance of the `XUnavailable`
+  N818 per-file-ignore precedent (`TransportUnavailable` →
+  `ExtractorUnavailable` → `ReasonerUnavailable`).
+- **`insufficient_context` reused as S6's terminal shape too, not a new
+  S6-specific type.** `retrieve.bundle.InsufficientContext` already
+  describes "not enough to proceed" pipeline-wide (`04`'s status enum has
+  one value, not one per stage), and the bundle's own admitted-file/token
+  counts stay an honest description of available evidence even when S6
+  couldn't validate a conclusion from it.
+- **`model`/`prompt_version`/`tokens` on `RootCauseAnalysis` come from the
+  real `LLMResult` the gateway returns, never from the model's own JSON
+  self-report** — `ReasonReply` has no such fields at all;
+  `GatewayReasoner._with_call_metadata()` injects them into the reply dict
+  post-hoc, after the gateway call completes.
+- **Explicit accuracy-bar scoping decision, made by the coordinator, not
+  unilaterally:** `15` T5.3's `≥20/25` and unfixable-01/02-vs-23 accept
+  criteria are corpus-wide statistical claims. Neither a full live-eval
+  measurement inside T5.3 nor letting `FakeProvider` self-certify the bar
+  was acceptable — the first duplicates `T10.1`'s job ahead of time with
+  less rigour, the second proves nothing about a real model's capability.
+  Resolution: exactly **one** live-gated test, same pattern as T5.1's
+  `test_ai_provider_live.py` (skipped without `RT_ANTHROPIC_API_KEY`),
+  running `reason()` against **7** real fixture cases (not all 25) with a
+  real model — enough to catch anything catastrophically wrong before T5.4
+  (patch generation) is built on top of this stage, not an accuracy
+  measurement. The formal `≥20/25` claim across all 25 cases, 3 runs, stays
+  exactly where `15` already puts it: `T10.1`, Phase 15. `15` T5.3's own
+  accept-criteria note and §5 item 14 now say this explicitly, so nobody
+  later assumes T5.3 already proved the accuracy number when it only
+  proved the mechanism runs.
+- **99% coverage on `pipeline/reason`** (344 stmts, 0 miss), clearing `14`
+  §10's ≥95% fingerprint/retrieval/scoring-adjacent floor — checked
+  deliberately, same discipline as every ticket since T4.1.
 
 ### T5.2 — The prompt system
 
@@ -658,7 +771,7 @@ as any other session.**
 | 10 | **`POST /v1/repositories/{id}/test_path_mapping` (`05` §6.6) is not wired as an HTTP endpoint** | T4.2 → Phase 16 or first `repositories`-CRUD ticket | `dry_run_path_mapping` is the full resolution logic as a pure function; the route needs `repositories` CRUD, which no ticket through Phase 7 builds. Deliberate scoping decision, not a gap — see `15` T4.2 and `05` §6.6. |
 | 11 | **Three corpus cases have no reachable root cause under T4.3's four strategies** | T4.3 → T4.4 / T5.x | `regression-02` (2 hops away), `config-02` (root cause is a composition-root-injected value's producer, no call edge), `type-mismatch-03` (root cause and failure point are sibling functions sharing only data, no call edge). Named by case id in `tests/integration/test_retrieve_strategies_corpus.py::ROOT_CAUSE_UNREACHABLE_BY_T4_3`; whether T4.4's budget allowing a second hop, or S6's reasoning-driven follow-up retrieval, closes any of these is an open question for later phases. |
 | 12 | **Release correlation (`03` §S5 strategy D) has no automatic "previous release" lookup** | T4.3 → T8.2 or a `repositories`/releases data source | `strategy_d_git_history`'s `release_diff` is `None` unless the caller supplies `previous_ref` explicitly — the mechanism (`gateway.compare`) is built and tested, but nothing upstream yet knows what the previous release tag was; that needs a releases table or GitHub API call this ticket has no reason to add. |
-| 14 | **S6 must independently reproduce the fixable/unfixable split item 13 moved off of S5** | T5.3 | Now that S5 admits all 25 corpus cases as `ContextBundle`, nothing yet asserts that S6 classifies `unfixable-01`/`unfixable-02` as `insufficient_context` (their `expected.final_status`) while the other 23 proceed. This is the acceptance property `test_the_controls_terminate_as_insufficient_context` used to check at S5 before item 13's resolution moved it to S6 — T5.3's own corpus test should assert it directly once S6 exists, not assume it. |
+| 14 | 🔶 **S6's fixable/unfixable split and its `≥20/25` root-cause-file accuracy bar are mechanism-verified at T5.3, not yet measured against real model behaviour** | T5.3 → T10.1 | `GatewayReasoner`'s evidence-binding validator and correction-retry ladder are built and tested against `FakeProvider` — a deliberately fabricated citation is rejected, 100% of surfaced findings pass evidence validation, and one live-gated smoke test (`test_reason_live.py`, 7 real fixture cases) confirms the mechanism runs against a real model without falling over. **Neither of `15` T5.3's two corpus-wide statistical claims — `unfixable-01`/`unfixable-02` terminating as `insufficient_context` while the other 23 proceed, and `≥20/25` fixtures identifying the correct root-cause file — has been measured against real model behaviour across the full corpus.** That measurement is `T10.1`'s job (Phase 15, full 25-case corpus, 3 runs), by explicit coordinator decision recorded in `15` T5.3's accept-criteria note and §4 T5.3 above. Do not close this item until T10.1 runs. |
 | 15 | **No orchestration constructs a live `GatewayExtractor`/`LLMGateway`, and no `Settings`-driven factory exists to build one** | T5.1/T5.2 → wherever first runs a real investigation | `apps/worker/roottrace_worker/settings.py` declares every field the gateway needs (API keys, cache TTL, cost caps); `gateway.py`/`GatewayExtractor` take them all as constructor arguments. Every current caller (all of them tests) constructs both directly with explicit providers/routing/storage/db/redis objects and a hand-picked `project_id`. T5.2 proved the *mechanism* works end-to-end against `FakeProvider` — what is still missing is (a) a factory that builds a real `LLMGateway` from `Settings` with real `psycopg`/`redis` connections, and (b) the ARQ task that would construct a `GatewayExtractor` per investigation with real IDs and call `understand(event, extractor=...)` for an actual error. Neither exists yet; both are pipeline orchestration, out of scope for every ticket built so far. |
 | 16 | **No provider-health circuit breaker** | T5.1 → undecided | `06` §2.4's responsibilities table names one ("opens ... when a provider exceeds its error threshold"), independent of the B9 cost-cap breaker (built). No section gives it an algorithm the way §8.2a gives the cost breaker one, so nothing was built against a guess. `_dispatch_tier` walks the configured tier order fresh on every call with no memory of a provider's recent failures. |
 | 17 | **No provider-side prompt caching** | T5.1/T5.2 → undecided | `06` §2.4/§3.1 name provider-native caching of the static L1-L3 prompt layers (Anthropic `cache_control`, OpenAI automatic caching) as a cost/latency optimisation, distinct from the *deterministic* content-hash cache (built, `ai/cache.py`). T5.2's `assemble_prompt` builds the L1-L5 split *conceptually* (`system`/`domain`/`task` are separate parameters), but the layers are concatenated into one flat `system` string before reaching `RenderedPrompt` — a provider call has no way to mark only the static L1-L3 span cacheable from a single string. Closing this needs `RenderedPrompt`/`ProviderRequest` to carry structured, per-layer content blocks, not just two flat strings; not attempted here since no ticket has scoped that shape change yet. |
@@ -706,7 +819,9 @@ make fixtures-verify    # ground truth resolved against real code (also in CI)
 ## 8. What to continue with
 
 **Phase 7 is complete and cleared (all four tickets, item 13 resolved — see
-§5). Phase 8 (`15` §7) is underway: T5.1 and T5.2 done, T5.3 next.**
+§5). Phase 8's mechanism is complete: T5.1, T5.2, and T5.3 are all done; its
+accuracy bar is explicitly deferred to `T10.1` (§5 item 14). T5.4 (`15` §8,
+Stage 7 `patch`) is next.**
 
 | Ticket | Scope | Status |
 |---|---|---|
@@ -716,25 +831,21 @@ make fixtures-verify    # ground truth resolved against real code (also in CI)
 | T4.4 | Ranking, budget, and quality scoring | ✅ Done — all bars clean; threshold revised per §5 item 13 |
 | T5.1 | LLM gateway | ✅ Done — `apps/worker/roottrace_worker/ai/*.py`; all 3 accept bars clean; see §4's T5.1 section and §5 items 16–17 for disclosed gaps |
 | T5.2 | Prompt system | ✅ Done — `apps/worker/roottrace_worker/ai/prompts/*`; both accept bars clean; closed §5 item 8; see §4's T5.2 section for the two T5.1 bugs it found and fixed |
+| T5.3 | Stage 6 — `reason` | 🔶 Mechanism done — `apps/worker/roottrace_worker/pipeline/reason/*`; 99% coverage; **corpus-wide accuracy bar (`≥20/25`, unfixable split) explicitly deferred to `T10.1`, not verified here — see §4's T5.3 section and §5 item 14** |
 
-**T5.3 — Stage 6 `reason`** (`15` §7, next): five-step protocol, hypothesis elimination,
-evidence binding with post-validation (P2 — every claim binds to a file path,
-line range, or commit SHA, verified by literal string comparison), retry-
-once-then-terminate on binding failure (the `insufficient_context` exit item
-13 moved the controls' fixability judgment onto — see §5 item 14). Accept:
-≥20/25 fixtures identify the correct root-cause file; 100% of surfaced
-findings pass evidence validation; a deliberately fabricated citation is
-rejected; **and** (item 14) `unfixable-01`/`unfixable-02` terminate as
-`insufficient_context` while the other 23 proceed — the property T4.4's own
-corpus test used to check before item 13 moved it here.
-
-`reason/v3.md` already exists (T5.2, verbatim from `A2` §4) — T5.3 does not
-need to author prompt text, only the `RootCauseAnalysis` Pydantic contract
-(`03` §S6's output shape), the semantic post-validators `06` §4.2's table
-names for S6 specifically, and a `GatewayReasoner`-shaped caller matching
-`GatewayExtractor`'s pattern. Item 15's orchestration gap (no ARQ task
-constructs any of these with real IDs yet) applies here too — worth
-deciding once, for both S4 and S6, rather than solving it twice.
+**T5.4 — Stage 7 `patch`** (`15` §8, next): read `03` §S7 and `A2` §5 in
+full before starting, same discipline as every prior ticket. S7 takes S6's
+`RootCauseAnalysis` (specifically `fix_strategy`) and produces an actual
+unified diff against the files S6 named — this is where `files_to_modify`
+⊆ retrieved paths (already enforced at S6) starts to matter operationally,
+since S7 can only patch content that was actually retrieved into the
+bundle. Expect another `Structured*` seam following the `StructuredExtractor`
+/ `StructuredReasoner` pattern (a `StructuredPatcher` or similar), another
+two-Pydantic-model contract split, and `patch/v4.md` (already shipped
+verbatim at T5.2) as its prompt text. P1 ("nothing reaches a human without
+proof") means S7's output is still just a hypothesis — the sandbox gates
+(Phase 10) are what prove a patch, not S7 itself; do not let T5.4 grow gate
+logic it isn't scoped to have.
 
 **Standing rules that still apply:** finish each ticket's acceptance
 criteria before starting the next; commit and push after each ticket
