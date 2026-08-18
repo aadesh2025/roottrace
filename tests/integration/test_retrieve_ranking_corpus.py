@@ -5,24 +5,34 @@
 > items are never evicted. The two "unfixable" fixtures terminate as
 > `insufficient_context` without proceeding to reasoning.
 
-**Three of the four numbers this file measures are clean. The fourth is not,
-and this file records the finding rather than hiding it** — see `03` §S5's
-implementation note and `docs/PROJECT-STATUS.md` for the full write-up. In
-short: `03` §S5's termination threshold ("fewer than 3 distinct priority 1-4
-files or fewer than 800 in-app tokens"), applied literally to what T4.3's four
-implemented strategies produce, also terminates 18 of the 23 non-control
-cases — every one of which carries `expected.final_status:
-"awaiting_decision"` (`14` §6.2), meaning the corpus expects them to reach
-reasoning, not abstain. Hand-checked against several: retrieval is not
-missing anything real for these cases — a single self-contained function with
-no callees and no type references mechanically caps at one priority-1-4 file,
-and the threshold was evidently calibrated for a retrieval richer than V1's
-deliberately narrow scope (P3, 1 hop, strategy C deferred) produces.
+**The third bar, as originally written, assumed S5 alone could tell a
+correctly-handled external failure apart from a genuine bug by evidence
+volume.** Measuring the corpus disproved that: `external-03` (a real bug —
+`InventoryClient.reserve` has no circuit breaker) and `unfixable-01` (a
+control — `InventoryClient.reserve` already raises correctly, no defect
+exists) admit the *identical* 2 files and 1231 tokens of priority 1-4
+evidence. `config-01` (also a real bug) admits only 251 tokens — fewer than
+either control. No file-count or token-count threshold separates the
+fixable set from the controls; every number that admits `config-01` also
+admits both controls, and every number that rejects the controls also
+rejects `config-01`. See `03` §S5's implementation note and
+`docs/PROJECT-STATUS.md` for the full write-up and the coordinator's
+decision.
 
-**This is left as found, not tuned to pass.** `INSUFFICIENT_CONTEXT_ON_FIXABLE_CASES`
-below names the exact set — if that set shrinks or grows, this file's
-assertions catch it, which is the point: the finding stays visible and
-precise rather than being silently absorbed by a looser test.
+**The resolution, decided by the coordinator, not tuned in unilaterally:**
+judging *fixability* from evidence volume was never S5's job — `03` already
+gives S6 its own `insufficient_context` exit ("on evidence-binding failure
+... terminal `insufficient_context`"), which is where a model concluding "no
+defect, external cause" belongs. S5's threshold (`MIN_ADMITTED_FILES`,
+`MIN_ADMITTED_IN_APP_TOKENS` in `ranking.py`) is lowered to what S5 can
+honestly judge: did retrieval resolve the failure point with any real
+in-app content, or not. Under that bar, all 25 corpus cases — the 23
+fixable cases and both controls — correctly produce a `ContextBundle`: S5's
+job is retrieval, and retrieval genuinely succeeded for all 25. Whether a
+case is *fixable* is not yet decided for any of them, including the
+controls, because S6 (reasoning) is not built. That determination, and the
+corpus's `expected.final_status: "insufficient_context"` for the two
+controls specifically, becomes a Phase 8 acceptance property, not T4.4's.
 """
 
 from __future__ import annotations
@@ -37,18 +47,12 @@ import pytest
 from fixtures.triggers.cases import CASE_IDS
 from roottrace_worker.github.fixture import FixtureTransport
 from roottrace_worker.github.types import RepoRef, RepoTree
-from roottrace_worker.pipeline.retrieve.bundle import (
-    ContextBundle,
-    InsufficientContext,
-    RetrievalOutcome,
-)
+from roottrace_worker.pipeline.retrieve.bundle import ContextBundle, RetrievalOutcome
 from roottrace_worker.pipeline.retrieve.ranking import (
-    MIN_ADMITTED_FILES,
-    MIN_ADMITTED_IN_APP_TOKENS,
     TOKEN_BUDGET,
     build_context_bundle,
 )
-from roottrace_worker.pipeline.retrieve.strategies import gather
+from roottrace_worker.pipeline.retrieve.strategies import _resolve_failure_path, gather
 from roottrace_worker.pipeline.understand import PathMapping, understand
 
 pytestmark = pytest.mark.integration
@@ -59,34 +63,6 @@ CORPUS = REPO_ROOT / "fixtures" / "error-corpus"
 FIXTURE_REPO_REF = RepoRef(owner="acme", name="checkout-api")
 
 CONTROLS = ("unfixable-01", "unfixable-02")
-
-#: The 18 non-control cases that terminate as `insufficient_context` under
-#: T4.3's current retrieval reach, against `expected.final_status:
-#: "awaiting_decision"` ground truth (`14` §6.2) — see this file's and `03`
-#: §S5's module docstrings for why. Not a target to shrink by tuning the
-#: threshold; a record of the open question for the next session.
-INSUFFICIENT_CONTEXT_ON_FIXABLE_CASES = frozenset(
-    {
-        "null-prop-02",
-        "null-prop-03",
-        "null-prop-04",
-        "type-mismatch-02",
-        "type-mismatch-03",
-        "key-error-01",
-        "key-error-02",
-        "key-error-03",
-        "external-02",
-        "external-03",
-        "race-01",
-        "race-02",
-        "boundary-02",
-        "config-01",
-        "config-02",
-        "regression-02",
-        "regression-03",
-        "resource-01",
-    }
-)
 
 
 def payload(case_id: str) -> dict[str, Any]:
@@ -128,7 +104,7 @@ def outcome_for(case_id: str, gateway: FixtureTransport, tree: RepoTree) -> Retr
     )
 
 
-# ── The three clean bars ─────────────────────────────────────────────────
+# ── The two bars S5 alone can honestly measure ───────────────────────────
 
 
 @pytest.mark.parametrize("case_id", CASE_IDS)
@@ -145,7 +121,14 @@ def test_priority_1_and_2_are_never_evicted(
     case_id: str, gateway: FixtureTransport, fixture_tree: RepoTree
 ) -> None:
     """When a bundle is produced at all, the failure point and (if resolved)
-    the entry point must be in it — `03` §S5 calls both "non-negotiable"."""
+    the entry point must be in it — `03` §S5 calls both "non-negotiable".
+
+    Checked against the tree-verified path (`_resolve_failure_path`), not
+    `understanding.failure_point.repo_path` directly — that field is S4's
+    cascade steps 1-2 alone (`03` §S4 has no repo access) and can be a
+    well-formed path that isn't a real file (`config-02`'s
+    `services/services/export.py`); T4.2/T4.3 re-verify it against the tree
+    before ever admitting a file, so this check must too."""
     event = payload(case_id)["events"][0]
     understanding = asyncio.run(understand(event, mappings=MAPPINGS)).understanding
     outcome = outcome_for(case_id, gateway, fixture_tree)
@@ -154,51 +137,41 @@ def test_priority_1_and_2_are_never_evicted(
     paths = {f.repo_path for f in outcome.files}
     failure = understanding.failure_point
     if failure and failure.repo_path:
-        assert failure.repo_path in paths, f"{case_id}: failure point evicted"
+        resolved = _resolve_failure_path(understanding, fixture_tree, failure)
+        if resolved:
+            assert resolved in paths, f"{case_id}: failure point evicted"
+
+
+# ── Retrieval succeeds for every case, controls included ────────────────
+
+
+@pytest.mark.parametrize("case_id", CASE_IDS)
+def test_every_case_reaches_a_real_context_bundle(
+    case_id: str, gateway: FixtureTransport, fixture_tree: RepoTree
+) -> None:
+    """All 25 cases, including both controls, resolve real evidence at S5 —
+    the controls' `InventoryClient` code is genuinely retrievable, it simply
+    contains no defect. Distinguishing "retrieved, and fixable" from
+    "retrieved, and not fixable" is S6's job (`03` line 751's
+    `insufficient_context` exit on evidence-binding failure), not S5's."""
+    outcome = outcome_for(case_id, gateway, fixture_tree)
+    assert isinstance(outcome, ContextBundle), (
+        f"{case_id}: S5 could not resolve any real evidence for the failure "
+        "point — this would be a genuine retrieval failure, not a fixability "
+        "judgment"
+    )
 
 
 @pytest.mark.parametrize("case_id", CONTROLS)
-def test_the_controls_terminate_as_insufficient_context(
+def test_the_controls_retrieve_the_client_boundary_correctly(
     case_id: str, gateway: FixtureTransport, fixture_tree: RepoTree
 ) -> None:
+    """Not a fixability check (that's S6, not built) — a check that S5 found
+    the right code for the right reason, so the eventual S6 judgment has
+    real evidence to work from rather than an accidental thin bundle."""
     outcome = outcome_for(case_id, gateway, fixture_tree)
-    assert isinstance(outcome, InsufficientContext), f"{case_id}: expected insufficient_context"
-
-
-# ── The fourth bar, honestly measured ────────────────────────────────────
-
-
-@pytest.mark.parametrize(
-    "case_id", sorted(set(CASE_IDS) - set(CONTROLS) - INSUFFICIENT_CONTEXT_ON_FIXABLE_CASES)
-)
-def test_reachable_fixable_cases_proceed_to_reasoning(
-    case_id: str, gateway: FixtureTransport, fixture_tree: RepoTree
-) -> None:
-    """The 5 non-control cases whose priority-1-4 evidence already clears the
-    threshold under T4.3's current retrieval reach."""
-    outcome = outcome_for(case_id, gateway, fixture_tree)
-    assert isinstance(outcome, ContextBundle), f"{case_id}: unexpectedly insufficient_context"
-
-
-@pytest.mark.parametrize("case_id", sorted(INSUFFICIENT_CONTEXT_ON_FIXABLE_CASES))
-def test_the_documented_calibration_gap_is_still_present(
-    case_id: str, gateway: FixtureTransport, fixture_tree: RepoTree
-) -> None:
-    """The inverse of the test above, for the 18 named cases — if one of
-    these starts proceeding to reasoning (a future retrieval improvement
-    closing the gap), that is worth knowing and moving out of this set, not
-    silently absorbing. Confirms each one fails specifically because fewer
-    than `MIN_ADMITTED_FILES` priority-1-4 files were found, distinguishing
-    "the mechanism works as literally spec'd" from an unrelated crash."""
-    outcome = outcome_for(case_id, gateway, fixture_tree)
-    assert isinstance(outcome, InsufficientContext), (
-        f"{case_id}: now proceeds to reasoning — move it out of "
-        f"INSUFFICIENT_CONTEXT_ON_FIXABLE_CASES and record why"
+    assert isinstance(outcome, ContextBundle)
+    paths = {f.repo_path for f in outcome.files}
+    assert "clients/inventory_client.py" in paths, (
+        f"{case_id}: expected the InventoryClient boundary in the bundle"
     )
-    # `03` §S5's threshold is an "or": file count OR token count. At least
-    # one side must actually be the trigger, or this case is failing for a
-    # reason the spec's rule does not describe.
-    assert (
-        outcome.admitted_file_count < MIN_ADMITTED_FILES
-        or outcome.admitted_in_app_tokens < MIN_ADMITTED_IN_APP_TOKENS
-    ), f"{case_id}: insufficient_context fired without either documented trigger"

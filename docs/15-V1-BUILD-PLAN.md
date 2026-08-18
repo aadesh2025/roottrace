@@ -409,20 +409,22 @@ Relevance formula, priority-ordered eviction, 24k hard budget, quality signals, 
 
 **Built.** `apps/worker/roottrace_worker/pipeline/retrieve/{ranking,quality,tokens,bundle}.py`. The mechanism is a literal, tested implementation of this section's relevance formula, eviction table, and both output shapes (`ContextBundle` / `InsufficientContext`) — see `03` §S5's implementation note for the two deliberate simplifications (one-pass `(priority, -relevance)` admission instead of a separate eviction pass; a dependency-free, deliberately-overcounting token estimate instead of a provider-specific tokenizer, reasoned the same way `ast` over Tree-sitter was at T4.1–T4.3).
 
-**Three of the four accept numbers are clean. The fourth is not, and it is not a bug this ticket's code should paper over:**
+**Two of the four accept-bar numbers were clean from the start; the other two exposed a real problem with the bar itself, since resolved by the coordinator:**
 
 | Bar | Result |
 |---|---|
 | Budget never exceeded across all 25 cases | ✅ 0/25 over |
 | Priority 1–2 items never evicted | ✅ verified directly across every case that reaches ranking |
-| The two controls terminate as `insufficient_context` | ✅ 2/2 |
-| *(everything else proceeds to reasoning)* | ❌ **18 of 23 non-control cases also terminate as `insufficient_context`**, against `expected.final_status: "awaiting_decision"` ground truth for every one of them |
+| The two controls terminate as `insufficient_context` | ⚠️ revised — see below |
+| *(everything else proceeds to reasoning)* | ✅ **25/25 cases now correctly produce a `ContextBundle` at S5** |
 
-The termination rule, read exactly as written in `03` §S5, mechanically fires on any case where T4.3's four strategies admit fewer than 3 priority-1–4 files or fewer than 800 in-app tokens — and for a single-frame bug whose function calls nothing but stdlib and references no type worth expanding (`key-error-01`, `config-01`, checked by hand), that is *correct, complete* retrieval capped at one file by the shape of the bug, not a retrieval gap. The threshold appears calibrated for a richer retrieval than V1's stated scope (P3 narrow retrieval, 1 hop, strategy C deferred) produces.
+Measuring the original threshold ("fewer than 3 distinct files or fewer than 800 in-app tokens") against the corpus first found that **18 of 23 non-control cases** also terminated as `insufficient_context`, against their own `expected.final_status: "awaiting_decision"` ground truth — a single-frame bug whose function calls nothing but stdlib and references no type worth expanding (`key-error-01`, `config-01`, checked by hand) is *correct, complete* retrieval capped at one file by the shape of the bug, not a gap.
 
-**Not fixed by adjusting the threshold.** Per explicit instruction: no number was tuned to make the corpus pass, and no retrieval logic was changed to manufacture extra files. This is where Phase 7 stops — see `docs/PROJECT-STATUS.md` for the full write-up, the exact case list, and the decision this leaves open for the next session.
+**Loosening the numbers turned out to be impossible, not just untried.** `external-03` (a real bug) and `unfixable-01` (a control) admit the identical 2 files / 1231 tokens of priority 1–4 evidence; `config-01` (also real) admits only 251. No threshold separates the fixable set from the controls — file/token volume is the same shape for both. Judging *fixability* was never S5's question: `03` §S6 already has its own `insufficient_context` exit for a model concluding "no defect, external cause." **Decided by the coordinator:** S5's threshold is lowered to what S5 can honestly judge — did retrieval resolve the failure point with any real content (`MIN_ADMITTED_FILES = 1`, `MIN_ADMITTED_IN_APP_TOKENS = 1`). All 25 cases, controls included, now correctly produce a `ContextBundle` — retrieval succeeded for all 25. Whether the controls are fixable is undetermined at S5 for any case and becomes a **Phase 8 (S6) acceptance property**, not T4.4's. Full finding and decision: `03` §S5's implementation note, `docs/PROJECT-STATUS.md`.
 
-> **This is the week to move slowly.** Retrieval correctness determines everything downstream. A wrong context produces a confident wrong answer that passes every later gate.
+> **This is the week to move slowly. Retrieval correctness determines everything downstream.** It did: the corpus caught a threshold that could never have worked as originally specified, before any reasoning was built on top of it.
+
+**Phase 7 is cleared to advance into Phase 8.**
 
 ---
 

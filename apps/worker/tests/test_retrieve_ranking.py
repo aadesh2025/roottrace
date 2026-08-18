@@ -239,8 +239,17 @@ def test_empty_candidates_terminate_as_insufficient_context() -> None:
     assert outcome.admitted_file_count == 0
 
 
-def test_fewer_than_3_priority_1_4_files_terminates() -> None:
-    """`03` §S5's exact threshold, the file-count branch of the `or`."""
+def test_a_single_resolved_failure_point_produces_a_bundle_not_insufficient() -> None:
+    """The T4.4-era threshold ("<3 distinct files or <800 tokens") was found,
+    by measuring the corpus, to be unable to separate a real single-file bug
+    (`config-01`, `key-error-01` — a self-contained function with no callees
+    or type refs, correctly and completely retrieved) from the two designed
+    controls (`external-03` retrieves the identical file/token shape as
+    `unfixable-01`). Judging fixability from evidence volume was never S5's
+    job (`03` line 751 gives S6 its own `insufficient_context` exit for
+    exactly that) — S5's bar is only "did retrieval find the failure point
+    with real content," which one genuinely resolved file already answers.
+    See `03` §S5's implementation note for the full finding."""
     candidates = RetrievalCandidates(
         files=(file("services/checkout.py", content="x" * 3000, symbols=("calculate_total",)),),
         graph_nodes=(GraphNode(id=FAILURE_ID, kind="function", is_failure_point=True),),
@@ -251,28 +260,18 @@ def test_fewer_than_3_priority_1_4_files_terminates() -> None:
     outcome = build_context_bundle(
         candidates, understanding(), repo=REPO, ref=REF, bundle_id="ctx_1", now=NOW
     )
-    assert isinstance(outcome, InsufficientContext)
-    assert outcome.admitted_file_count < MIN_ADMITTED_FILES
+    assert isinstance(outcome, ContextBundle)
+    assert len(outcome.files) >= MIN_ADMITTED_FILES
 
 
-def test_fewer_than_800_in_app_tokens_terminates_even_with_3_files() -> None:
-    """The token-count branch of the `or`, independent of file count — three
-    tiny files should trip this even though the file-count branch would not."""
-    tiny = "x" * 50  # well under 800 tokens even summed across 3 files
+def test_a_resolved_failure_point_with_no_real_content_terminates() -> None:
+    """The floor S5 can still honestly enforce: a "resolved" failure point
+    whose content is empty is not real evidence, regardless of how low the
+    file-count minimum goes."""
     candidates = RetrievalCandidates(
-        files=(
-            file("services/checkout.py", content=tiny, symbols=("calculate_total",)),
-            file("api/routes/checkout.py", content=tiny, symbols=("create_checkout",)),
-            file(
-                "clients/tax_client.py", strategy="call_graph", content=tiny, symbols=("get_rate",)
-            ),
-        ),
-        graph_nodes=(
-            GraphNode(id=FAILURE_ID, kind="function", is_failure_point=True),
-            GraphNode(id=ENTRY_ID, kind="function", is_entry_point=True),
-            GraphNode(id=CALLEE_ID, kind="function"),
-        ),
-        graph_edges=(GraphEdge(source=FAILURE_ID, target=CALLEE_ID, kind="calls"),),
+        files=(file("services/checkout.py", content="", symbols=("calculate_total",)),),
+        graph_nodes=(GraphNode(id=FAILURE_ID, kind="function", is_failure_point=True),),
+        graph_edges=(),
         history=None,
         tests=(),
     )
@@ -283,13 +282,15 @@ def test_fewer_than_800_in_app_tokens_terminates_even_with_3_files() -> None:
     assert outcome.admitted_in_app_tokens < MIN_ADMITTED_IN_APP_TOKENS
 
 
-def test_a_priority_5_caller_does_not_rescue_a_thin_bundle() -> None:
+def test_only_priority_5_evidence_still_terminates_as_insufficient() -> None:
     """A caller (priority 5) is real, useful content — but `03` §S5's
-    threshold is evaluated *after admitting priority 1-4* specifically, so a
-    caller-only third file must not count toward the 3-file minimum."""
+    threshold is evaluated *after admitting priority 1-4* specifically. A
+    caller found on its own, with the failure point itself never actually
+    fetched, is not evidence S5 can reason the failure point from — the
+    lowered floor (T4.4) still requires real priority 1-4 evidence, not
+    just any real content at any priority."""
     candidates = RetrievalCandidates(
         files=(
-            file("services/checkout.py", content="x" * 3000, symbols=("calculate_total",)),
             file(
                 "api/routes/webhooks.py",
                 strategy="call_graph",

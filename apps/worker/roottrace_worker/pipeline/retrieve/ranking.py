@@ -89,9 +89,23 @@ SYMBOL_OVERLAP_WEIGHT = 0.15
 #: `03` §S5: "commits/PRs decay over 90 days."
 RECENCY_WINDOW_DAYS = 90.0
 
-#: `03` §S5's termination condition, verbatim.
-MIN_ADMITTED_FILES = 3
-MIN_ADMITTED_IN_APP_TOKENS = 800
+#: `03` §S5's termination condition, revised at T4.4 after measuring the
+#: corpus: no fixed file-count or token-count number can separate "retrieval
+#: found real, thin, self-contained evidence" from "retrieval found nothing
+#: worth reasoning about" — `external-03` (a real bug) and `unfixable-01`
+#: (a designed control) admit the identical 2 files and 1231 tokens, while
+#: `config-01` (also a real bug) admits only 251. Any threshold that lets
+#: `config-01` through also lets both controls through, and any threshold
+#: that rejects the controls also rejects `config-01`. Judging *fixability*
+#: from evidence volume alone is not a question S5 (P3: retrieve narrowly)
+#: is positioned to answer — `03` already gives S6 its own `insufficient_context`
+#: exit for exactly this ("on evidence-binding failure ... terminal
+#: insufficient_context"). S5's bar is lowered to what it can actually judge
+#: honestly: did retrieval find the failure point at all, with any real
+#: in-app content, or not. See `03` §S5's implementation note for the full
+#: finding and the coordinator's decision.
+MIN_ADMITTED_FILES = 1
+MIN_ADMITTED_IN_APP_TOKENS = 1
 
 #: How many recent commits `history` carries into the bundle. Strategy D
 #: already caps at 10 (`03` §S5: "Last 10 commits"); this is not a second,
@@ -341,10 +355,11 @@ def build_context_bundle(
             admitted_file_count=len(priority_1_4),
             admitted_in_app_tokens=in_app_tokens,
             explanation=(
-                f"After admitting priority 1-4 evidence, only {len(priority_1_4)} distinct "
+                f"After admitting priority 1-4 evidence, {len(priority_1_4)} distinct "
                 f"file(s) and {in_app_tokens} token(s) of in-app source were available "
-                f"(need >= {MIN_ADMITTED_FILES} files or >= {MIN_ADMITTED_IN_APP_TOKENS} tokens). "
-                "Retrieval could not assemble enough evidence to reason about safely."
+                f"(need at least {MIN_ADMITTED_FILES} file and {MIN_ADMITTED_IN_APP_TOKENS} "
+                "token of real in-app content). Retrieval could not resolve any evidence "
+                "to reason about."
             ),
         )
 
