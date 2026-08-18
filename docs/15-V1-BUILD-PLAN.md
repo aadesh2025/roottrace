@@ -462,7 +462,7 @@ Five-layer assembly, untrusted-content fencing, tag neutralisation, instruction-
 
 Five-step protocol, hypothesis elimination, evidence binding with post-validation, retry-once-then-terminate on binding failure.
 
-**Accept:** ≥ 20/25 fixtures identify the correct root-cause file. 100% of surfaced findings pass evidence validation. A deliberately fabricated citation is rejected.
+**Accept:** ≥ 20/25 fixtures identify the correct root-cause file. 100% of surfaced findings pass evidence validation. A deliberately fabricated citation is rejected. `unfixable-01`/`unfixable-02` terminate as `insufficient_context`; the other 23 non-control cases proceed to a root-cause finding. (This last bar used to be checked at S5 — T4.4's original `insufficient_context` threshold caught the two controls by evidence volume. Measuring the corpus against that threshold showed it could not be loosened without also admitting the controls, since `external-03`, a real bug, and `unfixable-01`, a control, admit identical evidence volume; the coordinator's resolution moved the fixability judgment here, to S6's own `insufficient_context` exit on evidence-binding failure, per §S6's spec text. See `PROJECT-STATUS.md` §5 items 13–14 for the full history.)
 
 ### T5.4 Stage 7 — `patch`
 
