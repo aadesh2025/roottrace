@@ -1,13 +1,20 @@
-"""`diffing.py` (T5.4) — parsing and in-memory application of a unified
-diff against a `ContextBundle`'s retrieved windows. No gateway, no model,
-purely mechanical: `03` §S7's "we apply it in-memory with `unidiff` before
-accepting", exercised directly."""
+"""`diffing.py` — parsing and in-memory application of a unified diff. T5.4's
+half (`apply_diff_to_bundle`) checks a diff against a `ContextBundle`'s
+retrieved windows, `03` §S7's "we apply it in-memory with `unidiff` before
+accepting". T6.4's half (`apply_diff_to_files`, `03` §S8's G0) applies a
+diff against full file content and actually produces the patched text —
+nothing before S8 needed to do that, only to check applicability. No
+gateway, no model, purely mechanical either way."""
 
 from __future__ import annotations
 
 import pytest
 
-from roottrace_worker.pipeline.patch.diffing import apply_diff_to_bundle, parse_diff
+from roottrace_worker.pipeline.patch.diffing import (
+    apply_diff_to_bundle,
+    apply_diff_to_files,
+    parse_diff,
+)
 from roottrace_worker.pipeline.retrieve.bundle import (
     BundleFile,
     BundleGraph,
@@ -195,3 +202,70 @@ def test_multi_file_diffs_parse_without_diff_git_preambles() -> None:
     parsed = parse_diff(diff_text)
     assert parsed.ok
     assert len(parsed.file_stats) == 2
+
+
+# ── apply_diff_to_files (T6.4, G0) ───────────────────────────────────────
+
+
+def test_applies_a_single_hunk_modification_to_full_file_content() -> None:
+    diff_text = (
+        "--- a/foo.py\n+++ b/foo.py\n@@ -1,3 +1,4 @@\n"
+        " def f():\n-    return 1\n+    return 2\n+    # extra\n def g():\n"
+    )
+    result = apply_diff_to_files(diff_text, {"foo.py": "def f():\n    return 1\ndef g():\n"})
+    assert result.ok
+    assert result.files_patched == {"foo.py": "def f():\n    return 2\n    # extra\ndef g():\n"}
+
+
+def test_applies_multiple_hunks_in_the_same_file() -> None:
+    diff_text = (
+        "--- a/multi.py\n+++ b/multi.py\n@@ -1,2 +1,2 @@\n"
+        "-a = 1\n+a = 100\n b = 2\n@@ -5,2 +5,2 @@\n-e = 5\n+e = 500\n f = 6\n"
+    )
+    files = {"multi.py": "a = 1\nb = 2\nc = 3\nd = 4\ne = 5\nf = 6\n"}
+    result = apply_diff_to_files(diff_text, files)
+    assert result.ok
+    assert result.files_patched == {"multi.py": "a = 100\nb = 2\nc = 3\nd = 4\ne = 500\nf = 6\n"}
+
+
+def test_a_new_file_is_added_to_the_result() -> None:
+    diff_text = "--- /dev/null\n+++ b/tests/test_new.py\n@@ -0,0 +1,2 @@\n+def test_x():\n+    assert True\n"
+    result = apply_diff_to_files(diff_text, {})
+    assert result.ok
+    assert result.files_patched == {"tests/test_new.py": "def test_x():\n    assert True\n"}
+
+
+def test_a_deleted_file_is_removed_from_the_result() -> None:
+    diff_text = "--- a/old.py\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-x = 1\n-y = 2\n"
+    result = apply_diff_to_files(diff_text, {"old.py": "x = 1\ny = 2\n", "keep.py": "z = 1\n"})
+    assert result.ok
+    assert result.files_patched == {"keep.py": "z = 1\n"}
+
+
+def test_an_untouched_file_carries_over_unchanged() -> None:
+    diff_text = "--- a/a.py\n+++ b/a.py\n@@ -1,1 +1,1 @@\n-x = 1\n+x = 2\n"
+    result = apply_diff_to_files(diff_text, {"a.py": "x = 1\n", "b.py": "y = 1\n"})
+    assert result.ok
+    assert result.files_patched == {"a.py": "x = 2\n", "b.py": "y = 1\n"}
+
+
+def test_a_hunk_that_does_not_match_the_file_fails_to_apply() -> None:
+    diff_text = (
+        "--- a/foo.py\n+++ b/foo.py\n@@ -1,2 +1,2 @@\n def f():\n-    return 999\n+    return 2\n"
+    )
+    result = apply_diff_to_files(diff_text, {"foo.py": "def f():\n    return 1\n"})
+    assert not result.ok
+    assert "does not match" in (result.failure_reason or "")
+
+
+def test_a_file_referenced_but_absent_from_files_original_fails_to_apply() -> None:
+    diff_text = "--- a/missing.py\n+++ b/missing.py\n@@ -1,1 +1,1 @@\n-x = 1\n+x = 2\n"
+    result = apply_diff_to_files(diff_text, {})
+    assert not result.ok
+    assert "not present" in (result.failure_reason or "")
+
+
+def test_a_malformed_diff_fails_to_apply() -> None:
+    result = apply_diff_to_files("not a diff at all", {})
+    assert not result.ok
+    assert "failed to parse" in (result.failure_reason or "")

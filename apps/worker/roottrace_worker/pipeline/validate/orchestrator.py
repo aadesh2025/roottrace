@@ -145,8 +145,20 @@ def _build_create_config(
         # `/work`'s own size is `07` §3 L2's literal figure, independent of
         # `disk_limit_mb` (L5's *container layer* quota, `StorageOpt` below)
         # — a tmpfs is memory-backed, not disk-backed.
+        #
+        # T6.4 finding: Docker mounts every `Tmpfs` entry `noexec` by
+        # default unless the option string says otherwise — `07` §3 L2's
+        # own spec omits `noexec` for `/work` (unlike `/tmp`, which states
+        # it), by implication meaning `/work` should stay executable, but
+        # omission alone does not override Docker's default. Confirmed
+        # live: without `exec` here, G2 (dependency install) succeeds but
+        # every installed package with a compiled extension then fails to
+        # import — "failed to map segment from shared object" — which
+        # would otherwise look exactly like a patch problem, not an
+        # infrastructure one. `/tmp` keeps `noexec` deliberately (`07`'s
+        # own text); nothing gate-relevant needs `/tmp` to execute.
         "Tmpfs": {
-            "/work": "size=256m,mode=1777",
+            "/work": "size=256m,mode=1777,exec",
             "/tmp": "size=64m,mode=1777,noexec",  # noqa: S108 - container-internal mount path
         },
         "StorageOpt": {"size": f"{disk_limit_mb}m"},

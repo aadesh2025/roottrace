@@ -10,6 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from roottrace_worker.pipeline.understand.contracts import ExceptionFamily
+
 Language = Literal["python"]
 ExpectedOutcome = Literal["fail", "pass"]
 ValidationMode = Literal["full", "partial", "syntax_only"]
@@ -23,11 +25,17 @@ class _Contract(BaseModel):
 
 
 class RegressionTestRef(_Contract):
+    """`expected_error_family` is typed against `03` §S4's real
+    `ExceptionFamily` taxonomy, not a bare string — `07`'s own worked
+    example originally used `"type_error"`, which was never one of the
+    nine families (plus `unclassified`) that taxonomy actually defines;
+    corrected at T6.4 alongside the JSON example in `07` §7."""
+
     path: str
     test_id: str
     expected_pre: ExpectedOutcome = "fail"
     expected_post: ExpectedOutcome = "pass"
-    expected_error_family: str | None = None
+    expected_error_family: ExceptionFamily | None = None
 
 
 class Manifest(_Contract):
@@ -36,9 +44,20 @@ class Manifest(_Contract):
 
 
 class SandboxInput(_Contract):
-    """`07` §7's literal input contract — what travels over the container's
-    stdin after `start()` (§7's B10 note; corrected at T6.1 from the
-    original `docker cp`-to-file design)."""
+    """`07` §7's input contract — what travels over the container's stdin
+    after `start()` (§7's B10 note; corrected at T6.1 from the original
+    `docker cp`-to-file design).
+
+    `existing_tests` corrected at T6.4 from `07`'s literal
+    `["tests/test_checkout.py"]` (paths only) to `{path: content}`. G6
+    ("tests discovered by S5 as covering the implicated symbols") runs
+    tests that were never touched by the diff at all — that's the entire
+    point, catching a regression in code the patch didn't mean to affect —
+    so their content cannot be assumed to already be sitting in
+    `files_original`/`files_patched`, which are scoped to only the files
+    the diff *does* touch. The container has no filesystem access to fetch
+    it separately (no network, no host mounts), so it has to travel in
+    this same stdin payload or G6 cannot run at all."""
 
     validation_id: str
     language: Language
@@ -49,7 +68,7 @@ class SandboxInput(_Contract):
     new_files: dict[str, str] = Field(default_factory=dict)
     manifest: Manifest | None = None
     regression_test: RegressionTestRef | None = None
-    existing_tests: tuple[str, ...] = ()
+    existing_tests: dict[str, str] = Field(default_factory=dict)
     gates: tuple[GateName, ...]
     budgets: dict[str, int]
 

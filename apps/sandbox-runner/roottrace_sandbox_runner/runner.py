@@ -1,16 +1,21 @@
 """The process `apps/sandbox-runner/python/Dockerfile`'s `ENTRYPOINT` runs
-(`docs/07` §4, §7, §8). Reads the staged input, materialises the working
-tree, executes whichever gates the caller requested, and writes the result.
+(`docs/07` §4, §7, §8). Reads the staged input, executes whichever gates
+the caller requested, and writes the result.
 
-**No gate is implemented yet — deliberately, this ticket.** T6.1-T6.3 build
-the image, the orchestration that calls it, and the isolation the call
-happens under; `_GATE_DISPATCH` below is the seam T6.4 (`07` §6, the nine
-gates) fills in. Requesting a gate this dispatch table does not know about
-is a hard failure, not a silent skip — a validation that silently ran zero
-gates and reported `passed: true` would be exactly the "green without
-actually gating" failure mode `CLAUDE.md`'s testing standard exists to
-prevent, so an empty/unimplemented gate list is the only value this
-process will accept until T6.4 fills the table in.
+**T6.4: `_GATE_DISPATCH` is now filled in — G2 through G8, `gates.py`.**
+Requesting a gate this dispatch table does not know about is still a hard
+failure, not a silent skip, for the same reason it always was: a
+validation that silently ran zero gates and reported `passed: true` would
+be exactly the "green without actually gating" failure mode `CLAUDE.md`'s
+testing standard exists to prevent.
+
+**Fail-fast, `03` §S8's own ordering.** The first gate that fails stops
+the sequence — `07` §6 orders G2-G8 cheapest/most-informative first for
+exactly this reason, and there is no reason to spend a container's budget
+running G7 static analysis against code that failed G3's import check.
+Each gate materialises its own required tree (original vs patched, see
+`gates.py`'s module docstring) rather than this function doing one
+upfront materialisation that would be wrong for half of them.
 
 **Real container use is `main_from_stdin`, not `main`.** `main` stays
 file-based — simple to unit-test, and a reasonable primitive for any future
@@ -28,6 +33,15 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from roottrace_sandbox_runner.gates import (
+    gate_compile,
+    gate_dependencies,
+    gate_existing_tests,
+    gate_regression_post,
+    gate_regression_pre,
+    gate_security_scan,
+    gate_static_analysis,
+)
 from roottrace_sandbox_runner.io_contract import (
     RESULT_PATH,
     WORK_DIR,
@@ -41,21 +55,66 @@ from roottrace_sandbox_runner.materialize import materialize_tree
 
 GateFn = Callable[[dict[str, Any], Path], dict[str, Any]]
 
-#: Filled in at T6.4. Every name `07` §6 defines (G2-G8; G0/G1 run host-side,
-#: before a container ever starts) is a future key here.
-_GATE_DISPATCH: dict[str, GateFn] = {}
+#: `07` §6's own order — cheapest/most-informative first, fail-fast.
+_GATE_DISPATCH: dict[str, GateFn] = {
+    "G2": gate_dependencies,
+    "G3": gate_compile,
+    "G4": gate_regression_pre,
+    "G5": gate_regression_post,
+    "G6": gate_existing_tests,
+    "G7": gate_static_analysis,
+    "G8": gate_security_scan,
+}
 
 
 def _run_gates(
     gate_names: list[str], bundle: dict[str, Any], work_dir: Path
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], str | None]:
     unknown = [name for name in gate_names if name not in _GATE_DISPATCH]
     if unknown:
-        raise NotImplementedError(
-            f"gate(s) not yet implemented: {unknown} — the nine gates are T6.4, "
-            "not built by this image yet"
-        )
-    return [_GATE_DISPATCH[name](bundle, work_dir) for name in gate_names]
+        raise NotImplementedError(f"gate(s) not recognised: {unknown}")
+
+    results: list[dict[str, Any]] = []
+    for name in gate_names:
+        result = _GATE_DISPATCH[name](bundle, work_dir)
+        results.append(result)
+        if not result["passed"]:
+            return results, name
+    return results, None
+
+
+def _signals_for_scoring(gates: list[dict[str, Any]]) -> dict[str, Any]:
+    by_gate = {g["gate"]: g for g in gates}
+    g2, g3 = by_gate.get("G2"), by_gate.get("G3")
+    g4 = by_gate.get("G4")
+    g6 = by_gate.get("G6")
+    g7 = by_gate.get("G7")
+
+    build_passed = all(g["passed"] for g in (g2, g3) if g is not None)
+    # `03` §S8/`06` §7.3: "regression_test_valid" means G4 proved the test
+    # is real (fails on unpatched code) — it says nothing about whether G5
+    # then passed, which is a separate signal this dict doesn't carry a
+    # field for (`failed_gate` already tells the caller if G5 was the one
+    # that stopped the sequence).
+    regression_test_valid = bool(g4["passed"]) if g4 is not None else False
+
+    test_pass_ratio = None
+    if g6 is not None:
+        total = g6["detail"].get("total", 0)
+        passed_count = g6["detail"].get("passed", 0)
+        test_pass_ratio = (passed_count / total) if total else None
+
+    new_high = g7["detail"].get("new_high", 0) if g7 is not None else 0
+    new_medium = g7["detail"].get("new_medium", 0) if g7 is not None else 0
+
+    return {
+        "build_passed": build_passed,
+        "regression_test_valid": regression_test_valid,
+        "test_pass_ratio": test_pass_ratio,
+        "new_static_findings_high": new_high,
+        "new_static_findings_medium": new_medium,
+        "degraded_mode": False,
+    }
 
 
 def _error_result(validation_id: str, wall_ms: int, message: str) -> dict[str, Any]:
@@ -98,7 +157,12 @@ def _process(bundle: dict[str, Any], *, work_dir: Path, result_path: Path) -> in
 
     try:
         materialize_tree(work_dir, bundle["files_patched"])
-        gates = _run_gates(list(bundle["gates"]), bundle, work_dir)
+        gates, failed_gate = _run_gates(list(bundle["gates"]), bundle, work_dir)
+        # Gates that need the original tree (G4, G6/G7's "pre" runs) leave
+        # /work in whatever state they last materialised — reset to the
+        # patched tree as the final, predictable state regardless of which
+        # gate ran last or whether any gate ran at all.
+        materialize_tree(work_dir, bundle["files_patched"])
     except Exception as exc:  # this process must never crash silently
         _finish(
             _error_result(bundle["validation_id"], wall_ms(), f"{exc}\n{traceback.format_exc()}"),
@@ -108,15 +172,15 @@ def _process(bundle: dict[str, Any], *, work_dir: Path, result_path: Path) -> in
 
     result = {
         "validation_id": bundle["validation_id"],
-        "passed": True,
+        "passed": failed_gate is None,
         "mode": "full",
         "gates": gates,
-        "failed_gate": None,
+        "failed_gate": failed_gate,
         "resource_usage": {
             # Real cpu_ms/peak_memory_mb/peak_pids/disk_written_mb tracking
-            # is added alongside the gates that actually spawn subprocesses
-            # to measure (T6.4) — reporting fabricated numbers here would be
-            # exactly the kind of check that only looks real.
+            # would need cgroup introspection this process does not have
+            # reason to add yet — reporting fabricated numbers here would
+            # be exactly the kind of check that only looks real.
             "wall_ms": wall_ms(),
             "cpu_ms": 0,
             "peak_memory_mb": 0,
@@ -124,14 +188,7 @@ def _process(bundle: dict[str, Any], *, work_dir: Path, result_path: Path) -> in
             "disk_written_mb": 0,
         },
         "transcript": {"stdout_bytes": 0, "stderr_bytes": 0, "truncated": False},
-        "signals_for_scoring": {
-            "build_passed": True,
-            "regression_test_valid": False,
-            "test_pass_ratio": None,
-            "new_static_findings_high": 0,
-            "new_static_findings_medium": 0,
-            "degraded_mode": False,
-        },
+        "signals_for_scoring": _signals_for_scoring(gates),
     }
     _finish(result, result_path)
     return 0

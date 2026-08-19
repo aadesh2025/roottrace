@@ -5,16 +5,17 @@
 > open, and what to pick up next. Deliberately un-numbered so it is never
 > mistaken for part of the frozen contract set.
 >
-> **Last updated:** 2026-08-18, this commit (T5.4 — Stage 7 `patch` — built;
-> T5.1's LLM gateway, T5.2's prompt system, and T5.3's Stage 6 `reason` all
-> built earlier the same day; Phase 8 (AI reasoning) and Phase 9 (patch
-> generation) are both mechanism-complete, their corpus-wide accuracy bars
-> deferred to `T10.1` by the same coordinator decision applied consistently
-> to both — see §1). T4.4's calibration finding resolved by the coordinator
-> before any of this work; Phase 7 cleared first — see §5 item 13. Session
-> ran unattended overnight per the coordinator's explicit instructions,
-> halted at the hard-stop as instructed, resumed with the coordinator's
-> decision, then continued through Phase 8 and into Phase 9 same-day.
+> **Last updated:** 2026-08-19, this commit (T6.4 — the nine gates — built;
+> T6.1 sandbox image, T6.2 orchestration, and T6.3 isolation all built the
+> same session; Phase 10's mechanism is now complete through G0–G8 —
+> T6.4a's real-p95 measurement across all 25 fixtures and T6.5's degraded
+> mode are what remain, see §1). Phase 8 (AI reasoning) and Phase 9 (patch
+> generation) were completed the prior day, both mechanism-complete with
+> their corpus-wide accuracy bars deferred to `T10.1`. T4.4's calibration
+> finding resolved by the coordinator before any of that; Phase 7 cleared
+> first — see §5 item 13. Every T6.x finding in this entry was made by
+> testing against a real Docker daemon, not assumed from a config dict —
+> see §4's T6.1–T6.4 sections for the corrections that testing surfaced.
 > Regenerate this from `docs/15-V1-BUILD-PLAN.md` and `git log` — those are the
 > authorities. If this file and `15` disagree, `15` wins.
 
@@ -22,13 +23,16 @@
 
 ## 1. Where the build is, in one line — READ THIS FIRST
 
-**Phase 7 (retrieval) is complete and cleared. Phase 8's mechanism is
-complete (T5.1 LLM gateway, T5.2 prompt system, T5.3 Stage 6 `reason`).
-Phase 9's mechanism is now also complete: T5.4 (Stage 7 `patch`) is built,
-tested, and committed. Both phases' own corpus-wide accuracy bars
-(`≥20/25` root-cause files, `≥24/25` diffs apply cleanly) are explicitly
-deferred to `T10.1` — see below. T6.1 (sandbox container images, Phase 10)
-is next.**
+**Phase 7 (retrieval) is complete and cleared. Phase 8's and Phase 9's
+mechanisms are complete (T5.1–T5.4), both phases' corpus-wide accuracy
+bars deferred to `T10.1`. Phase 10 (sandbox validation) is now
+mechanism-complete through G0–G8: T6.1 (container image), T6.2
+(orchestration), T6.3 (isolation, the full `07` §12 security checklist),
+and T6.4 (the nine gates) are all built, tested against a real Docker
+daemon, and committed. Two items remain before Phase 10 itself is done: T6.4a (measuring real
+sandbox p95 across all 25 fixtures × 3 runs — a corpus-wide measurement,
+same shape as the accuracy bars deferred above) and T6.5 (degraded mode).
+T6.5 is next.**
 
 Phase 7's hard-stop condition (§5 item 13) was resolved by the coordinator
 before Phase 8 started: `03` §S5's original `insufficient_context` threshold
@@ -132,23 +136,102 @@ fall over against a real model — **not** an accuracy measurement, same
 explicit deferral as T5.3's, applied consistently: `15` T5.4's
 `≥24/25 diffs apply cleanly` bar is verified at `T10.1`, not here.
 
+**T6.1, the sandbox image (`apps/sandbox-runner/`):** `roottrace/sandbox-
+python:3.12`, digest-pinned base, an offline wheel cache covering the V1
+fixture corpus's own dependencies plus the pinned analysis toolchain
+(pytest, ruff, mypy, bandit, coverage), and the new
+`roottrace_sandbox_runner` package that becomes the image's `ENTRYPOINT`.
+**Two real corrections to `07`'s own B10 mechanism, both found by testing
+against a live Docker daemon rather than trusting the doc:** `docker cp`
+is rejected outright against any container created with `read_only: true`
+— input now travels over the container's stdin after `start()` instead;
+`/work`'s tmpfs content does not survive the container's own process
+exiting, so `runner.py` now also emits the result JSON to stdout,
+delimited, which `docker logs` retrieves reliably from a stopped
+container. Neither correction relaxed any isolation control — see T6.3.
+
+**T6.2, orchestration (`apps/worker/roottrace_worker/pipeline/validate/`):**
+`SandboxOrchestrator` — create, start, write stdin, wait with a hard
+SIGKILL timeout, extract the delimited result, always remove — plus
+`SandboxReaper` for a container whose supervising worker process itself
+died mid-validation. Every `07` §3 isolation flag is set on every
+container from creation; verified live: a clean run round-trips, a 0 s
+timeout forces the kill path and still cleans up, the concurrency
+semaphore caps real *running* containers at the configured limit
+(measured by polling actual container state, not task lifecycle — an
+easy thing to get wrong, gotten wrong once before switching to the real
+measurement), and the reaper removes a genuinely orphaned container while
+leaving a fresh one alone. 100% coverage on `pipeline/validate` (193
+stmts at the time) combining unit and integration suites.
+
+**T6.3, isolation (`apps/worker/tests/test_sandbox_isolation_security.py`):**
+every item in `07` §12's checklist as a real assertion against a live
+container — DNS/TCP blocked, `EROFS` on `/etc`, `mount`/`unshare`/
+`ptrace(ATTACH)` all `EPERM`, a fork bomb contained without host impact,
+an over-limit allocation OOM-killed inside the container only, an
+infinite loop SIGKILLed at the timeout, no unexpected host path under
+`/proc/self/mountinfo`, an uncached `pip install` failing offline. **One
+real, non-security-critical finding, corrected rather than kept:** the
+checklist's original name-pattern regex for the container's environment
+flagged `GPG_KEY` (a public release-signing key fingerprint baked into
+the base image, not a credential — Docker's `Env` merges with an image's
+own `ENV`, never replaces it, so nothing can unset it). Replaced with an
+explicit allowlist (`KNOWN_BASE_IMAGE_ENV_KEYS`) plus a direct check that
+no actual worker secret name is present — the invariant `07` §3 L7
+actually cares about.
+
+**T6.4, the nine gates (`pipeline/validate/gates.py` + `roottrace_sandbox_
+runner/gates.py`):** G0/G1 host-side (diff-apply-and-materialise, `ast`-
+based syntax check), G2–G8 inside the container, dispatched fail-fast in
+`07`'s own cheapest-first order. **G4 — "the critical gate" — verified
+with the actual `ValidationResult` printed, not just an assertion:** a
+genuine fix with a genuinely reproducing test passes every gate; a
+theatrical test that also passes on unpatched code is rejected; a test
+that fails for an unrelated reason (a broken import, not the bug) is
+rejected too, with the real exception type and message in the gate
+detail either way. G5 catches a "fix" that doesn't fix anything. G6's
+pre/post baseline correctly separates `newly_failing` from
+`already_failing`. G7 counts only new static findings, HIGH-only gate-
+failing. G8 reconstructs added lines via `difflib` (no raw diff travels
+into the container) and blocks a newly-introduced `eval()`. Disclosed
+scoping decision: G4/G5's exception-family check is strict only for the
+`03` §S4 families that map cleanly onto specific built-in exceptions;
+the families a codebase mostly defines its own exception classes for are
+recorded, not gate-failing.
+
+**Every isolation control CLAUDE.md names as non-negotiable — no network,
+no credentials, read-only rootfs, non-root, all capabilities dropped —
+held throughout T6.1–T6.4, confirmed against a live container, never
+loosened to make anything work.** Every correction found along the way
+(stdin/stdout delivery, the environment allowlist, `existing_tests`
+needing content) was a fix to *how* a property was achieved, never a
+reduction of the property itself — each one disclosed here and in `07`,
+not silently patched over.
+
 The system, as built: accept a production error over HTTP, sanitise it,
 fingerprint it, group it into an issue, score its severity, decide whether it
 deserves a pipeline run, turn it into a structured `ErrorUnderstanding` with a
 retrieval plan, resolve every stack frame in the corpus to the real file it
 came from, assemble frame-direct content plus a one-hop call graph plus git
 history plus a discovered test, rank/dedupe/budget all of that into a real
-`ContextBundle` for all 25 corpus cases, and can now turn any of that into a
-real, structured, cost-accounted, failover-safe chain of LLM calls that
-produces an evidence-bound root-cause finding **and** an in-memory-verified
-unified diff: S4's `understand`, S6's `reason`, and S7's `patch` all
-genuinely call a model end-to-end (`GatewayExtractor`, `GatewayReasoner`,
+`ContextBundle` for all 25 corpus cases, turn any of that into a real,
+structured, cost-accounted, failover-safe chain of LLM calls that produces
+an evidence-bound root-cause finding **and** an in-memory-verified unified
+diff, and can now **prove that diff** against a hardened, isolated
+container running the real nine-gate sequence `03` §S8 specifies — G4's
+regression-test-must-actually-reproduce-the-bug requirement chief among
+them. S4's `understand`, S6's `reason`, and S7's `patch` all genuinely
+call a model end-to-end (`GatewayExtractor`, `GatewayReasoner`,
 `GatewayPatcher`, each tested against `FakeProvider` plus one live-gated
-smoke test), though nothing constructs any of them for a live investigation
-yet (no orchestration ticket exists). No vector search (deferred to V2 by
-design), no sandbox, no dashboard yet.
+smoke test); S8's `validate` genuinely runs a real diff through a real
+sandbox. Nothing yet constructs any of S4–S8 for a live investigation
+(no orchestration ticket exists). No vector search (deferred to V2 by
+design), no repair loop, no independent review, no confidence engine, no
+dashboard yet.
 
-**Next:** T6.1 (sandbox container images, Phase 10) — per `15` §8. See §8.
+**Next:** T6.5 (degraded mode, Phase 10) — per `15` §8. See §8. T6.4a
+(real sandbox p95 across all 25 fixtures × 3 runs) remains open, same
+"corpus-wide measurement deferred" shape as `T10.1`'s own bars — see §5.
 
 ---
 
@@ -169,7 +252,7 @@ design), no sandbox, no dashboard yet.
 | **7** | **Retrieval** | **T4.1–T4.4** | ✅ **Complete — all 4 tickets built, calibration finding resolved, see §5 item 13** |
 | 8 | AI reasoning | T5.1–T5.3 | 🔶 Mechanism complete — all 3 tickets built; accuracy bar deferred to T10.1, see §5 item 14 |
 | 9 | Patch generation | T5.4 | 🔶 Mechanism complete — built; accuracy bar deferred to T10.1, see §5 item 19 |
-| 10 | Sandbox validation | T6.1–T6.5 | ⬜ Not started |
+| 10 | Sandbox validation | T6.1–T6.5 | 🔶 Mechanism complete through G0–G8 (T6.1–T6.4 built); T6.4a real-p95 measurement and T6.5 degraded mode remain |
 | 11 | Repair loop | T7.1 | ⬜ Not started |
 | 12 | Independent review | T7.2 | ⬜ Not started |
 | 13 | Confidence engine | T7.3 | ⬜ Not started |
@@ -177,12 +260,13 @@ design), no sandbox, no dashboard yet.
 | 15 | Evaluation harness | T10.1 | ⬜ Not started |
 | 16 | Dashboard | T8.2–T8.4, T9.1–T9.8 | ⬜ Not started |
 
-**21 tickets closed of 47** (T5.4 is the 21st), **Phase 7 cleared, Phase 8
+**25 tickets closed of 47** (T6.4 is the 25th), **Phase 7 cleared, Phase 8
 and Phase 9 both mechanism-complete** (both accuracy bars deferred to
-T10.1). See §1. (39 tickets have their own section in `15`; T9.1–T9.8 are
-listed as a table in `15` §11.)
+T10.1), **Phase 10 mechanism-complete through G0–G8**. See §1. (39 tickets
+have their own section in `15`; T9.1–T9.8 are listed as a table in `15`
+§11.)
 
-Of the 14 pipeline stages in `03`, **S1–S7 all exist**, S5 in full: frame
+Of the 14 pipeline stages in `03`, **S1–S8 all exist**, S5 in full: frame
 path resolution, four of five fetch strategies (strategy C deliberately
 deferred to V2 — the index is never populated in V1), and ranking/dedup/budget/
 quality scoring. **S4's, S6's, and S7's seams are all closed** —
@@ -191,10 +275,13 @@ quality scoring. **S4's, S6's, and S7's seams are all closed** —
 `StructuredPatcher` implementations, each assembling the five-layer prompt
 (`ai/prompts`, T5.2) and calling `LLMGateway.complete` (T5.1), each tested
 end-to-end against `FakeProvider` plus one live-gated smoke test against a
-real model. What is still missing for any of them to run against a real
-investigation is orchestration — nothing yet constructs a `GatewayExtractor`,
-`GatewayReasoner`, or `GatewayPatcher` with real IDs and wires S4 → S5 → S6
-→ S7 together for a live error (no orchestration ticket exists). See §4.
+real model. **S8 (`validate`) is real too** — `SandboxOrchestrator` drives
+the real `roottrace/sandbox-python:3.12` image through a real G0–G8
+sequence, proven against a live Docker daemon rather than mocked. What is
+still missing for any of S4–S8 to run against a real investigation is
+orchestration — nothing yet constructs any of them with real IDs and
+wires S4 → S5 → S6 → S7 → S8 together for a live error (no orchestration
+ticket exists). See §4.
 
 ---
 
@@ -220,20 +307,184 @@ investigation is orchestration — nothing yet constructs a `GatewayExtractor`,
 | Prompt system (T5.2) | Five-layer assembly (`ai/prompts/assembly.py`); `<untrusted_context>` fencing with tag neutralisation and instruction-pattern flagging; every `A2`-literal prompt shipped as a versioned `.md` file, loaded through `PromptRegistry`; `GatewayExtractor` — the real `StructuredExtractor`, closing T4.1's seam, tested end-to-end through `understand(...)` against `FakeProvider` | `apps/worker/tests/test_ai_prompts_*.py`, `test_understand_gateway_extractor.py`, `test_understand_extraction_schema.py` — **both `15` T5.2 accept criteria hold; found and fixed two real T5.1 gateway bugs in the process (§4)** |
 | S6 `reason` (T5.3) | `GatewayReasoner` — the real `StructuredReasoner`, closing S6's seam; evidence-binding validator (`validate.py`) enforcing `03` §S6's rule that a claim declaring evidence is dropped whole on any binding failure, while a claim declaring none is kept as speculative; a second, S6-specific correction-retry ladder distinct from T5.1's schema ladder; `model`/`prompt_version`/`tokens` injected from the real `LLMResult`, never model self-report | `apps/worker/tests/test_reason_validate.py` (22), `test_reason_gateway_reasoner.py` (12), `test_reason_stage.py` (5), `test_reason_live.py` (7, live-gated, skipped without `RT_ANTHROPIC_API_KEY`) — mechanism criteria hold (100% evidence validation, fabricated citation rejected); **the corpus-wide `≥20/25` and unfixable-01/02-vs-23 accuracy bars are explicitly deferred to `T10.1`, not verified here — see §1 and §5 item 14** |
 | S7 `patch` (T5.4) | `GatewayPatcher` — the real `StructuredPatcher`, closing S7's seam; `diffing.py`'s in-memory `unidiff`-based apply check (H5) against the actual retrieved window; `validate.py`'s scope check (H6) — allowlist, forbidden CI/lockfile paths, `must_not_modify`, existing-test deletion; two registered failure codes (`RT-AI-0005` scope, `RT-AI-0006` non-applying diff), both retried once; `patch_id`/`base_commit`/`files_changed`/`scope_warning`/`model`/`prompt_version`/`tokens` all caller-supplied or computed, never model self-report | `apps/worker/tests/test_patch_diffing.py` (11), `test_patch_validate.py` (14), `test_patch_gateway_patcher.py` (8), `test_patch_stage.py` (5), `test_patch_live.py` (5, live-gated, skipped without `RT_ANTHROPIC_API_KEY`) — mechanism criteria hold (every constraint-table row exercised, both failure codes fire and retry correctly); H4 (Tree-sitter symbol existence) disclosed as not built, §5 item 18; **the corpus-wide `≥24/25 diffs apply cleanly` bar is explicitly deferred to `T10.1`, not verified here — see §1 and §5 item 19** |
+| Sandbox image (T6.1) | `roottrace/sandbox-python:3.12` — digest-pinned, offline wheel cache, `roottrace_sandbox_runner` as `ENTRYPOINT`. Two `07` B10 corrections (stdin in, delimited-stdout result out) found by testing against a live daemon | `apps/sandbox-runner/tests/` (20 tests, container-free) — image builds reproducibly; `fixtures/synthetic-repo/requirements.txt` installs `--no-index` under `--network none`, verified live |
+| Sandbox orchestration (T6.2) | `SandboxOrchestrator` (create → stdin → wait-with-kill → extract → remove) + `SandboxReaper`; every `07` §3 isolation flag set from `create()` | `apps/worker/tests/test_validate_orchestrator*.py` (18) — clean run, 0 s timeout kill, concurrency cap measured against real running containers, reaper reaps an orphan and leaves a fresh one alone |
+| Sandbox isolation (T6.3) | Every `07` §12 checklist item as a live assertion — network, filesystem, identity, syscalls, resource limits, mountinfo | `apps/worker/tests/test_sandbox_isolation_security.py` (17, 1 skipped as a named duplicate of T6.2's own proof) — **one real, disclosed finding**: `GPG_KEY` (public, not a secret) failed the checklist's original name-pattern regex; replaced with an explicit allowlist plus a direct worker-secret-name check |
+| The nine gates (T6.4) | G0/G1 host-side (`pipeline/validate/gates.py`); G2–G8 in-container (`roottrace_sandbox_runner/gates.py`), fail-fast, `07`'s own order. **G4 verified with the real `ValidationResult` printed**: genuine fix passes, theatrical test rejected, unrelated-error test rejected | `apps/sandbox-runner/tests/test_gates_pure.py` (23, pure logic), `apps/worker/tests/test_sandbox_gates_integration.py` (11, live container) — all four `15` T6.4 accept criteria verified individually, not deferred (mechanism claims, not a corpus-wide statistic) |
 
-**Test totals:** 2,127 collected — 1,136 `unit`, 991 `integration`; 220 tests
-also carry the `security` marker. Overall unit coverage **94%** against a ratchet
+**Test totals:** 2,247 collected — 1,221 `unit`, 1,009 `integration`; 237 tests
+also carry the `security` marker. Overall unit coverage **91%** against a ratchet
 of **75**; `pipeline/understand`, `pipeline/retrieve`, `pipeline/reason`,
-`pipeline/patch`, and `ai/` are all at 93–99% — clearing `14` §10's
-≥90%/≥85% pipeline-stage floor (the nearest named category — `14` has no
-dedicated "AI engine" row).
+`pipeline/patch`, `ai/`, and `pipeline/validate`'s host-side half are all at
+91–100% — clearing `14` §10's ≥90%/≥85% pipeline-stage floor. `roottrace_
+sandbox_runner/gates.py`'s G2–G8 bodies execute inside a container process
+during integration testing — a different OS process entirely, invisible to
+`coverage.py`'s instrumentation of the host pytest run — so their coverage
+percentage understates real verification; the 11 live-container tests in
+`test_sandbox_gates_integration.py` are what actually proves them correct,
+which a line-coverage number on subprocess-shelling code could not do
+regardless of its value.
 
 ---
 
 ## 4. Decisions taken in this session
 
 This session covers all four Phase 7 tickets (T4.1–T4.4), all three of
-Phase 8's tickets (T5.1, T5.2, T5.3), and Phase 9's one ticket, T5.4.
+Phase 8's tickets (T5.1, T5.2, T5.3), Phase 9's one ticket (T5.4), and
+Phase 10's first four tickets (T6.1–T6.4).
+
+### T6.4 — The nine gates
+
+**Read `03` §S8 and `07` §6 in full before touching this section — both
+are the binding gate contract.**
+
+- **G0/G1 host-side, G2–G8 in-container, fail-fast in `07`'s own order.**
+  `pipeline/validate/gates.py` gained `check_diff_applies` (G0 — applies a
+  diff against *full file content*, not a retrieval window; T5.4 only
+  ever checked applicability, never produced patched text, so
+  `pipeline/patch/diffing.py` gained `apply_diff_to_files` to actually do
+  that) and `check_syntax` (G1, `ast.parse`, same reasoning `ast_index.py`
+  gives for not using Tree-sitter in a Python-only V1). `roottrace_
+  sandbox_runner/gates.py` gained `gate_dependencies` through
+  `gate_security_scan` for G2–G8, dispatched from `runner.py`'s now-filled
+  `_GATE_DISPATCH`. The sequence stops at the first failing gate —
+  `07` orders G2–G8 cheapest/most-informative first for exactly this
+  reason, and there is no reason to run G7 against code that already
+  failed G3.
+- **G4 got the most scrutiny, on purpose — see §1 for the actual printed
+  `ValidationResult` from all three cases.** A genuine fix with a
+  genuinely reproducing test passes every gate. A theatrical test (passes
+  even on unpatched code) is rejected, `failed_gate: "G4"`, with the real
+  pytest summary in the detail. A test that fails for an *unrelated*
+  reason (`ModuleNotFoundError` from a typo, not the bug) is also
+  rejected — `07`'s own distinction ("the test is broken, not
+  demonstrative") — with the real exception type surfaced, not conflated
+  with a genuine reproduction.
+- **Exception-family matching is strict only where a fixed list can be
+  honest.** `03` §S4's nine families (plus `unclassified`) map cleanly
+  onto specific built-in exceptions for five of them
+  (`null_undefined`/`type_mismatch`/`key_index`/`resource`/
+  `serialization`); the other five (`integration`/`data_db`/`auth`/
+  `concurrency`/`unclassified`) cover exceptions a real codebase mostly
+  defines its own classes for (a custom `TaxServiceUnavailable`, an ORM's
+  own hierarchy) that no fixed built-in list could enumerate without
+  rejecting perfectly good regression tests on a technicality. The
+  family is recorded either way; it only gates G4 for the five strict
+  families.
+- **`existing_tests` corrected from `07`'s literal `["path"]` to
+  `{path: content}`.** G6 ("tests discovered by S5 as covering the
+  implicated symbols") runs tests the diff never touched at all — that is
+  the entire point, catching a regression in code the patch didn't mean
+  to affect — so their content cannot be assumed to already be in
+  `files_original`/`files_patched`, which are scoped to only the files
+  the diff *does* touch. The container has no other way to obtain it (no
+  network, no host mounts). `07`'s own worked example also had
+  `expected_error_family: "type_error"`, which was never one of `03`
+  §S4's real family values — corrected to `type_mismatch` in the same
+  pass, `RegressionTestRef.expected_error_family` now typed against the
+  real `ExceptionFamily` enum instead of a bare string.
+- **G8 reconstructs added lines with `difflib`, not a diff it doesn't
+  have.** No raw diff text travels into the container (`SandboxInput`
+  only carries `files_original`/`files_patched`/`new_files`) — G8 diffs
+  the two itself and pattern-scans only the `+`-prefixed lines, matching
+  `07`'s "added lines only" scope without needing a field nothing else in
+  the contract has a use for.
+- **`gate_dependencies` (G2) uses `pip install --user`, not `--target`** —
+  `site.ENABLE_USER_SITE` makes subsequent `python` invocations pick the
+  installed packages up automatically, no `PYTHONPATH` threading needed
+  between gates that each materialise their own tree.
+- **99% combined coverage on the host-visible half** (`pipeline/validate`,
+  223 stmts, 100%; the in-container G2–G8 bodies are outside `coverage.py`'s
+  process-boundary visibility by construction — see §3's note). All four
+  of `15` T6.4's accept criteria verified individually against a live
+  container, not deferred — these are mechanism claims (does G4 actually
+  gate, does G6 actually separate `newly_failing` from `already_failing`),
+  not the corpus-wide statistic T6.4a still owns.
+
+### T6.3 — Sandbox isolation, the full `07` §12 checklist
+
+- **Every checklist item became a real, automated assertion against a
+  live container** (`test_sandbox_isolation_security.py`) — DNS/TCP
+  blocked, `EROFS` on `/etc`, `mount`/`unshare`/`ptrace(ATTACH)` all
+  `EPERM` (`ptrace(PTRACE_TRACEME)` against *itself* deliberately not
+  tested — that request needs no elevated capability on any Linux system,
+  sandboxed or not, so a permissive result from it is not a finding), a
+  fork bomb contained by `pids_limit`, an over-limit allocation OOM-killed
+  inside the container only, an infinite loop SIGKILLed at the configured
+  timeout, no unexpected host path under `/proc/self/mountinfo`.
+- **One real, disclosed finding: `GPG_KEY` failed the original name-
+  pattern regex** (`(KEY|TOKEN|SECRET|PASSWORD|DSN|URL)`) despite holding
+  a public release-signing key fingerprint, not a credential — baked into
+  `python:3.12-slim-bookworm`'s own image layer, which Docker's container
+  `Env` merges with rather than replaces, so no Dockerfile or Engine API
+  mechanism can unset it. Replaced with an explicit allowlist
+  (`orchestrator.py`'s `KNOWN_BASE_IMAGE_ENV_KEYS`) plus a direct check
+  that none of the worker's actual secret-bearing env var names is
+  present — the invariant `07` §3 L7 actually cares about, checked more
+  precisely than a name regex ever could.
+- **T6.1/T6.2's isolation config is not separable from T6.3's checklist at
+  the code level** — every flag was already set on every `create()` call
+  from T6.2 onward; T6.3's own contribution is the formal proof, not a
+  second hardening pass.
+
+### T6.2 — Sandbox orchestration
+
+- **`SandboxOrchestrator`: create → start → write stdin → wait with a
+  hard `SIGKILL` timeout → extract the delimited result → always
+  remove**, plus an independent `SandboxReaper` for the case a
+  supervising worker process itself died mid-validation. Every `07` §3
+  isolation flag is part of the same `_build_create_config` call — there
+  is no "orchestrate first, isolate later" sequencing that does not mean
+  running untrusted code unconfined in between.
+- **Concurrency measured correctly on the second attempt, not the
+  first.** An initial instrumentation approach counted "task started" to
+  "task fully returned including cleanup," which overshoots the
+  semaphore's actual scope and reported 4 concurrent containers against a
+  configured limit of 2. Polling the Docker API directly for containers
+  in `running` state — what a semaphore protecting *host resources*
+  actually needs to bound — confirmed the real number: exactly 2, never
+  more, under 8 concurrent runs.
+- **`runc` requested when `runsc` (gVisor) is unavailable, rather than
+  the create call failing** — this dev host has no gVisor installed; `07`
+  §11 already treats this as an accepted, disclosed gap (seccomp +
+  AppArmor + network-none still hold).
+
+### T6.1 — The sandbox image
+
+- **`roottrace/sandbox-python:3.12`**: digest-pinned `python:3.12-slim-
+  bookworm` base, an offline wheel cache scoped to the V1 fixture
+  corpus's own dependencies (not `07`'s "~600 packages" production-scale
+  aspiration — `15` T6.1's actual accept bar only needs this corpus,
+  offline, reproducibly) plus the pinned analysis toolchain, and the new
+  `roottrace_sandbox_runner` package as `ENTRYPOINT`.
+- **Two real corrections to `07`'s own B10 mechanism, both found by
+  testing against Docker Engine 29.5.3 rather than trusting the doc, and
+  both fixed without relaxing any isolation control:**
+  - `docker cp`/`put_archive` is rejected outright — `"container rootfs
+    is marked read-only"` — against *any* destination on a container
+    created with `read_only: true`, regardless of container state or
+    which mount the destination resolves to, not just the tmpfs-timing
+    problem B10 already described. **Fix:** input travels over the
+    container's stdin after `start()` instead — a pipe, not a filesystem
+    write, unaffected by either problem.
+  - `/work`'s tmpfs content does not survive the container's own process
+    exiting, so reading `result.json` back via `cp` after `wait()` finds
+    nothing. **Fix:** `runner.py` also emits the result JSON to stdout,
+    delimited (`===ROOTTRACE_RESULT_START===`/`_END`), which `docker
+    logs` retrieves reliably from a stopped container.
+  - **A third finding, smaller but load-bearing:** Docker mounts every
+    `Tmpfs` entry `noexec` by default unless the option string says
+    otherwise. `07` §3 L2 names `noexec` for `/tmp` but not `/work`, by
+    implication meaning `/work` should stay executable — omission alone
+    does not override Docker's default, though. Without `exec` added
+    explicitly, G2's dependency install succeeded but every installed
+    package with a compiled extension then failed to import —"failed to
+    map segment from shared object" — which would otherwise have looked
+    exactly like a patch problem, not an infrastructure one.
+- Both `docs/07-SANDBOX-VALIDATION.md` and this file were updated in the
+  same commits as the code, per `CLAUDE.md`'s "documentation drift is a
+  defect" rule — nothing here was left as tribal knowledge in a commit
+  message.
 
 ### T5.4 — Stage 7 `patch`
 
@@ -880,7 +1131,7 @@ as any other session.**
 | 3 | **Object storage (S1 step 8) not implemented** | T2.1 → worker | `payload_url` is null. The `api` holds no credential that can write to Supabase Storage, by the same boot invariant that keeps the service-role key out of it. The archive write belongs to the worker. |
 | 4 | **Triage is not DB-wired** | T2.4 → T8.2 | The B8 insert-and-handle-conflict path needs the `investigations` table and its partial unique index, which belong to the orchestrator. |
 | 5 | **Fixture tree has one revision on disk** | T3.3 | `ref` is resolved, validated and recorded but does not select content. `blame` and `compare` do distinguish revisions. Nothing in V1 reads a historical ref. |
-| 6 | **Fixture suite verified against stock `python:3.12-slim`, not the hardened image** | T3.1 → T6.1 | Checked with `--network none`, which is the property T6.1 would otherwise inherit as a surprise. Re-verify at T6.1. |
+| 6 | ✅ **Fixture suite verified against stock `python:3.12-slim`, not the hardened image** | T3.1 → T6.1, closed | Re-verified against `roottrace/sandbox-python:3.12` itself once it existed — T6.1's own offline-install accept criterion is exactly this check, and T6.3's isolation suite runs the real image, not the stock one. |
 | 7 | **`replay` and `live` transports raise `TransportUnavailable`** | V2 | Deliberate. They are listed and skipped in the contract suite rather than omitted — an omitted transport is one nobody remembers to add. |
 | 8 | ✅ **The LLM structured-extraction step of S4 is unimplemented** | T4.1 → T5.2, closed | `GatewayExtractor` (T5.2) is the real `StructuredExtractor` implementation — `UnavailableExtractor` remains as the fallback `03` §S4's own failure-mode table specifies (provider exhaustion, budget exhaustion), not as the only implementation. Tested end-to-end through `understand(...)` against `FakeProvider`. What remains is orchestration, not extraction — see item 15. |
 | 9 | **Exception-family accuracy has no margin (23/25, exactly the T4.1 bar)** | T4.1 → T5.2 | `race-01` and `resource-01` are knowable only from breadcrumbs, and the deterministic taxonomy deliberately never reads them (`A1` §9). The extractor at T5.2 is expected to close this; if it does not, the threshold needs revisiting, not the taxonomy. Named explicitly in `tests/integration/test_understand_corpus.py` so a third miss is a build break. |
@@ -893,6 +1144,9 @@ as any other session.**
 | 17 | **No provider-side prompt caching** | T5.1/T5.2 → undecided | `06` §2.4/§3.1 name provider-native caching of the static L1-L3 prompt layers (Anthropic `cache_control`, OpenAI automatic caching) as a cost/latency optimisation, distinct from the *deterministic* content-hash cache (built, `ai/cache.py`). T5.2's `assemble_prompt` builds the L1-L5 split *conceptually* (`system`/`domain`/`task` are separate parameters), but the layers are concatenated into one flat `system` string before reaching `RenderedPrompt` — a provider call has no way to mark only the static L1-L3 span cacheable from a single string. Closing this needs `RenderedPrompt`/`ProviderRequest` to carry structured, per-layer content blocks, not just two flat strings; not attempted here since no ticket has scoped that shape change yet. |
 | 18 | **H4 (Tree-sitter symbol existence) is not built for S7** | T5.4 → undecided | `06` §5's guardrail catalogue names H4 as an S7 post-validator ("invented function/class names"), but `03` §S7's own "Constraints enforced on the output" table has no row for it, and neither of `15` T5.4's own accept criteria requires it. A heuristic AST-based check (reusing `pipeline/retrieve/ast_index.py`) risked false-rejecting correct patches referencing legitimate stdlib/third-party symbols with no accept bar actually demanding the check exist — built noisily seemed worse than disclosed and deferred. H5 (diff applicability) and H6 (scope enforcement), the other two S7 guardrails `06` names, are both built and tested. |
 | 19 | 🔶 **S7's `≥24/25 diffs apply cleanly` accuracy bar is mechanism-verified at T5.4, not yet measured against real model behaviour** | T5.4 → T10.1 | `GatewayPatcher`'s in-memory diff-apply check and scope validator are built and tested against `FakeProvider` — every constraint-table row is exercised, both registered failure codes fire and retry correctly, and one live-gated smoke test (`test_patch_live.py`, 5 real fixture cases through the full S4→S5→S6→S7 chain) confirms the mechanism runs against a real model without falling over. **`15` T5.4's `≥24/25 diffs apply cleanly` corpus-wide statistical claim has not been measured against real model behaviour across the full corpus.** That measurement is `T10.1`'s job (Phase 15, full 25-case corpus, 3 runs), by the same coordinator decision recorded for item 14/T5.3, applied consistently here. Do not close this item until T10.1 runs. |
+| 20 | 🔶 **Sandbox p95 (`07`'s own budget) is mechanism-verified per-gate at T6.4, not yet measured across the full corpus** | T6.4 → T6.4a | Every gate's timeout and pass/fail behaviour is proved against real containers (`test_sandbox_gates_integration.py`, 11 cases against live Docker). What is not yet measured is wall-clock p95 for a full `_run_gates()` pass across all 25 corpus fixtures × 3 runs — the same corpus-wide-statistic shape as items 14/19, owned by `T6.4a`, not yet run. Do not close until that measurement exists with real numbers. |
+| 21 | **G6's flaky-test handling is not built** | T6.4 → undecided | `03` §S8 does not specify a re-run-on-failure policy for G6 (existing test suite, pre/post), and `15` T6.4's accept criteria don't require one. `gate_existing_tests` runs each suite once per side and classifies by name-set diff (`newly_failing` vs `already_failing`); a genuinely flaky pre-existing test would show up as `newly_failing` on an unlucky run with no retry to distinguish it from a real regression. No corpus fixture currently exercises this, so it is disclosed rather than guessed at. |
+| 22 | **AppArmor profile is declared in config (T6.1) but not loaded on this dev host** | T6.1/T6.3 → production hardening | `settings.py`'s `sandbox_apparmor_profile` field exists and the boot invariant requires it set (+ `runsc`) in `production`; T6.3's isolation suite ran with seccomp + `network:none` + `runc` (no gVisor, no AppArmor profile loaded) on this Windows/WSL2 dev host, which `07` §11 already treats as an accepted, disclosed local-dev gap, not a silent one. |
 
 ---
 
@@ -939,8 +1193,10 @@ make fixtures-verify    # ground truth resolved against real code (also in CI)
 **Phase 7 is complete and cleared (all four tickets, item 13 resolved — see
 §5). Phase 8 and Phase 9 are both mechanism-complete: T5.1 through T5.4 are
 all done; both phases' accuracy bars are explicitly deferred to `T10.1`
-(§5 items 14 and 19). T6.1 (`15` §8, sandbox container images, Phase 10)
-is next.**
+(§5 items 14 and 19). Phase 10 is mechanism-complete through G0–G8: T6.1
+through T6.4 are all done, verified against a real Docker daemon. T6.5
+(`15` §8, degraded mode) is next; T6.4a (real sandbox p95 across the full
+corpus, §5 item 20) remains open alongside it.**
 
 | Ticket | Scope | Status |
 |---|---|---|
@@ -952,18 +1208,22 @@ is next.**
 | T5.2 | Prompt system | ✅ Done — `apps/worker/roottrace_worker/ai/prompts/*`; both accept bars clean; closed §5 item 8; see §4's T5.2 section for the two T5.1 bugs it found and fixed |
 | T5.3 | Stage 6 — `reason` | 🔶 Mechanism done — `apps/worker/roottrace_worker/pipeline/reason/*`; 99% coverage; **corpus-wide accuracy bar (`≥20/25`, unfixable split) explicitly deferred to `T10.1`, not verified here — see §4's T5.3 section and §5 item 14** |
 | T5.4 | Stage 7 — `patch` | 🔶 Mechanism done — `apps/worker/roottrace_worker/pipeline/patch/*`; 99% coverage; two of three accept criteria (forbidden-path, regression-test) verified deterministically; **`≥24/25` diffs-apply-cleanly bar explicitly deferred to `T10.1`, not verified here — see §4's T5.4 section and §5 item 19** |
+| T6.1 | Sandbox container image | ✅ Done — `apps/sandbox-runner/`; builds reproducibly, offline install verified; two B10 corrections + the tmpfs-`exec` finding, see §4's T6.1 section |
+| T6.2 | Sandbox orchestration | ✅ Done — `apps/worker/roottrace_worker/pipeline/validate/orchestrator.py`; concurrency bound verified at exactly 2 against a live daemon after a self-caught measurement-methodology fix, see §4's T6.2 section |
+| T6.3 | Sandbox isolation | ✅ Done — full `07` §12 checklist automated against a live container (`test_sandbox_isolation_security.py`); one disclosed finding (`GPG_KEY`), see §4's T6.3 section |
+| T6.4 | The nine gates | ✅ Done — `apps/sandbox-runner/roottrace_sandbox_runner/gates.py` + `apps/worker/.../pipeline/validate/gates.py`; G0–G8 all real, fail-fast; G4 explicitly confirmed to fail on both a theatrical test and an unrelated-error test and pass only on a genuine fix, formal pytest (`test_sandbox_gates_integration.py`, 11/11 against live Docker) matching manual verification exactly; see §4's T6.4 section. Corpus-wide p95 measurement still open — §5 item 20 |
 
-**T6.1 — Container images** (`15` §8, next, Phase 10): read `07-SANDBOX-
-VALIDATION.md` in full before starting — `CLAUDE.md` calls this out
-explicitly ("read the whole thing before touching it"). `roottrace/
-sandbox-python:3.12` with a warmed wheel cache and a pinned analysis
-toolchain, digest-pinned base, Trivy-scanned. Accept: the image builds
-reproducibly, and the synthetic repo's dependencies install fully offline
-— the sandbox's hard "no network" invariant (`CLAUDE.md` non-negotiables)
-starts to matter from this ticket onward. P1 ("nothing reaches a human
-without proof") is what the next five tickets (T6.1–T6.5, the nine gates)
-exist to satisfy — S7's diff is still just a hypothesis until it survives
-them.
+**T6.5 — Degraded mode** (`15` §8, next, Phase 10, final ticket): read `07`
+§5 ("Degraded mode") before starting. Cache-miss handling with honest mode
+reporting — cache coverage determines `mode: full | partial | syntax_only`,
+gates that need a missing wheel are skipped rather than faked, and the
+validation confidence component is capped, never silently left at full
+confidence with fewer gates actually run. Accept (`15`): removing a
+required wheel produces `mode: "partial"`, the affected gates report
+`skipped`, and the confidence component is capped — never a silent pass.
+This is the last ticket of Phase 10; P1 ("nothing reaches a human without
+proof") is fully satisfied only once a `partial`/`syntax_only` run cannot
+be mistaken for a `full` one anywhere downstream.
 
 **Standing rules that still apply:** finish each ticket's acceptance
 criteria before starting the next; commit and push after each ticket

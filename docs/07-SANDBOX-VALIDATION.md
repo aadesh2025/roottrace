@@ -356,6 +356,8 @@ Any HIGH finding fails the gate **and** caps final confidence at 0. We never pub
                                     writes tree into /work (tmpfs, already mounted by now)
 ```
 
+> **T6.4 corrections to this example, both found while actually implementing the gates rather than assumed:** `expected_error_family` below reads `"type_mismatch"`, not the original `"type_error"` — `03` §S4's exception family taxonomy (`ExceptionFamily`, `pipeline/understand/contracts.py`) has nine families plus `unclassified`; `type_error` was never one of them, and `type_mismatch` is the real value S4 would actually produce for this case. `existing_tests` is now `{path: content}`, not a bare path list — G6 ("tests discovered by S5 as covering the implicated symbols") runs tests the diff never touched, which is the entire point, so their content cannot be assumed to already be sitting in `files_original`/`files_patched` (scoped to only the files the diff *does* touch); the container has no other way to obtain it, having no network and no host mounts.
+
 ```jsonc
 {
   "validation_id": "val_01J2K...",
@@ -371,9 +373,9 @@ Any HIGH finding fails the gate **and** caps final confidence at 0. We never pub
     "test_id": "tests/test_checkout_tax.py::test_calculate_total_raises_when_tax_unavailable",
     "expected_pre": "fail",
     "expected_post": "pass",
-    "expected_error_family": "type_error"
+    "expected_error_family": "type_mismatch"
   },
-  "existing_tests": ["tests/test_checkout.py"],
+  "existing_tests": { "tests/test_checkout.py": "…" },
   "gates": ["G2","G3","G4","G5","G6","G7","G8"],
   "budgets": { "total_s": 45, "deps_s": 10, "tests_s": 20, "static_s": 10 }
 }

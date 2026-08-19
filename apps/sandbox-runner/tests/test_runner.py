@@ -56,22 +56,40 @@ def test_a_well_formed_input_with_no_requested_gates_round_trips(
     assert result["resource_usage"]["wall_ms"] >= 0
 
 
-def test_a_requested_but_unimplemented_gate_fails_honestly(
+def test_a_requested_but_unrecognised_gate_fails_honestly(
     sandbox_paths: tuple[Path, Path, Path],
 ) -> None:
-    """`_GATE_DISPATCH` is empty until T6.4 — requesting a real gate name
-    must fail loudly, never silently report `passed: true` with zero gates
-    actually run. This is the exact "green without gating" failure mode
-    `CLAUDE.md`'s testing standard exists to prevent."""
+    """Requesting a gate name `_GATE_DISPATCH` doesn't know (G0/G1 run
+    host-side and are never in this list; "G99" names nothing at all) must
+    fail loudly, never silently report `passed: true` having run fewer
+    gates than asked for. This is the exact "green without gating" failure
+    mode `CLAUDE.md`'s testing standard exists to prevent."""
     input_path, work_dir, result_path = sandbox_paths
-    input_path.write_text(json.dumps(_valid_input(gates=["G2"])), encoding="utf-8")
+    input_path.write_text(json.dumps(_valid_input(gates=["G99"])), encoding="utf-8")
 
     exit_code = runner.main(input_path=input_path, work_dir=work_dir, result_path=result_path)
 
     assert exit_code == 1
     result = json.loads(result_path.read_text(encoding="utf-8"))
     assert result["passed"] is False
-    assert "not yet implemented" in result["error"]
+    assert "not recognised" in result["error"]
+
+
+def test_g2_runs_for_real_when_requested_with_no_manifest(
+    sandbox_paths: tuple[Path, Path, Path],
+) -> None:
+    """A minimal input with no `manifest` declared — G2 is a real,
+    implemented gate as of T6.4, and skips cleanly rather than failing
+    when there is nothing to install."""
+    input_path, work_dir, result_path = sandbox_paths
+    input_path.write_text(json.dumps(_valid_input(gates=["G2"])), encoding="utf-8")
+
+    exit_code = runner.main(input_path=input_path, work_dir=work_dir, result_path=result_path)
+
+    assert exit_code == 0
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result["passed"] is True
+    assert result["gates"][0]["gate"] == "G2"
 
 
 def test_missing_input_writes_an_honest_failure_result(

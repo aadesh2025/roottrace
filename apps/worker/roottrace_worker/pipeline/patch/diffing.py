@@ -122,6 +122,87 @@ def _apply_new_file(pf: unidiff.PatchedFile) -> ApplyResult:
     return ApplyResult(applies_cleanly=True)
 
 
+@dataclass(frozen=True, slots=True)
+class AppliedDiff:
+    """G0 (`03` §S8, `07` §6): "patched_files = apply_unified_diff(bundle.files,
+    patch.diff)". Distinct from `apply_diff_to_bundle` above — that function
+    checks a diff against a *retrieval window* (T5.4, before a patch is even
+    trusted); this one applies a diff against *full file content* (S8, once
+    a patch already has real content to modify) and actually produces the
+    patched text, which nothing before S8 needed to do."""
+
+    files_patched: dict[str, str] | None
+    failure_reason: str | None
+
+    @property
+    def ok(self) -> bool:
+        return self.files_patched is not None
+
+
+def apply_diff_to_files(diff_text: str, files_original: dict[str, str]) -> AppliedDiff:
+    """Files untouched by the diff carry over into the result unchanged —
+    `07` §6's G0 is about the *changed* files applying cleanly, not about
+    every file in the bundle being mentioned in the diff."""
+    parsed = parse_diff(diff_text)
+    if not parsed.ok:
+        return AppliedDiff(
+            files_patched=None, failure_reason=f"diff failed to parse: {parsed.error}"
+        )
+
+    assert parsed.patch_set is not None  # noqa: S101 - `parsed.ok` guarantees this
+    result = dict(files_original)
+
+    for pf in parsed.patch_set:
+        if pf.is_removed_file:
+            result.pop(pf.path, None)
+            continue
+
+        original = "" if pf.is_added_file else files_original.get(pf.path)
+        if original is None:
+            return AppliedDiff(
+                files_patched=None, failure_reason=f"{pf.path}: not present in files_original"
+            )
+
+        patched = _apply_full_file(pf, content=original)
+        if patched is None:
+            return AppliedDiff(
+                files_patched=None, failure_reason=f"{pf.path}: a hunk does not match the file"
+            )
+        result[pf.path] = patched
+
+    return AppliedDiff(files_patched=result, failure_reason=None)
+
+
+def _apply_full_file(pf: unidiff.PatchedFile, *, content: str) -> str | None:
+    """Same hunk-walking logic `_apply_against_window` uses, generalised to
+    a full file (`window_start` is always `1`, since there is no retrieval
+    window here) and building the patched output rather than only checking
+    it — `None` on any mismatch, same "first failure wins" rule."""
+    lines = content.splitlines(keepends=True)
+    output: list[str] = []
+    cursor = 0  # 0-indexed position in `lines` already copied into `output`
+
+    for hunk in pf:
+        index = hunk.source_start - 1 if hunk.source_length > 0 else hunk.source_start
+        if index < cursor or index > len(lines):
+            return None
+        output.extend(lines[cursor:index])
+        cursor = index
+
+        for line in hunk:
+            if line.is_added:
+                output.append(line.value)
+                continue
+            if cursor >= len(lines) or lines[cursor] != line.value:
+                return None
+            if line.is_context:
+                output.append(line.value)
+            cursor += 1
+
+    output.extend(lines[cursor:])
+    return "".join(output)
+
+
 def _apply_against_window(
     pf: unidiff.PatchedFile, *, content: str, window_start: int
 ) -> ApplyResult:
