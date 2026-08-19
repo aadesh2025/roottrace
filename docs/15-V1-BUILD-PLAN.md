@@ -553,6 +553,8 @@ Gate-specific routing, including G4 → regenerate test only and G5 → return t
 
 **Accept:** Each of the eight gate-specific routes is individually triggered and produces the correct next stage. Three failures terminate as `validation_failed` with all attempts retained.
 
+**Built.** `strategy`/`reroute_to_stage` are always deterministic (`routing.py`, one row per G1–G8, `03` §S9's own table — G5 is the only reroute to S6); a model (`fast` tier, `repair/v1.md`, already scaffolded ahead of this ticket alongside T5.1/T5.2's prompt-registry work) only writes a case-specific `instruction_delta` around the deterministic instruction text, falling back to that text — never terminating — on gateway failure, the same precedent `03` §S4 sets for its own fast-tier enhancement over a real floor. Attempt exhaustion is checked before routing, per `03`'s own algorithm order, so a terminal `validation_failed` never depends on the failing gate being routable at all. `G0`/`"timeout"`/`"runner_error"` are deliberately excluded from routing (`gate_instructions.py`'s own pre-existing docstring: "an unrecognised gate is a bug in the caller, not a case this table should grow a default for") — an open tension with `03` §S8's "[timeout] enters the repair loop like any other failure" disclosed, not silently resolved, in `PROJECT-STATUS.md`'s T7.1 section. All eight routes and the three-strikes exhaustion path are tested directly (`test_repair_routing.py`, `test_repair_stage.py`); the gateway seam is tested end-to-end against `FakeProvider` (`test_repair_gateway_repairer.py`).
+
 ### T7.2 Stage 10 — `critique`
 
 Separate provider where available, fresh context, seven review dimensions, blocking rules.
