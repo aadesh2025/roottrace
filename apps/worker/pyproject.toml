@@ -31,7 +31,7 @@ dependencies = [
   "httpx>=0.28,<1.0",
   # S7 patch (T5.4) — `03` §S7 names this library literally: "We apply it
   # in-memory with `unidiff` before accepting."
-  "unidiff>=0.7,<1.0",
+  "unidiff>=0.7,<2.0",
   # S8 sandbox orchestration (T6.2, `07` §8) — an async Docker Engine API
   # client, matching the async `await docker.containers.create(...)` shape
   # `07`'s own orchestration pseudocode is written in. `docker-py` (the
