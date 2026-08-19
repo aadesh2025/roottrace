@@ -1,0 +1,29 @@
+# The sandbox image's own toolchain (docs/07 §4's literal Dockerfile), pinned
+# separately from apps/worker's dev-tooling versions in root pyproject.toml —
+# deliberately: gate results must stay reproducible across a given image
+# build regardless of what version of ruff/mypy the rest of this repo happens
+# to use for its own linting.
+#
+# The first five are the V1 fixture corpus's own real dependencies
+# (fixtures/synthetic-repo/requirements.txt) — the only manifest this image's
+# offline install actually needs to satisfy in V1. `07` §4's ~600-package
+# "top PyPI downloads" cache is a production-scale aspiration; V1's accept
+# bar (15 T6.1) is narrower: this corpus, offline, reproducibly.
+fastapi==0.111.0
+httpx==0.27.0
+pydantic==2.7.1
+python-dateutil==2.9.0.post0
+pytest==8.2.0
+# fastapi depends on uvicorn[standard], whose extra-gated deps (uvloop in
+# particular) `pip download --platform` does not reliably resolve when
+# cross-downloading for a foreign platform — verified missing, added
+# explicitly rather than trusted to come along transitively.
+uvloop==0.22.1
+
+# Analysis toolchain (07 §4's Dockerfile, verbatim versions).
+pytest-timeout==2.3.1
+pytest-json-report==1.5.0
+ruff==0.5.0
+mypy==1.10.0
+bandit==1.7.9
+coverage==7.5.0

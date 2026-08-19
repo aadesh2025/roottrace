@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+python/.warm-venv/
+python/requirements.in
+python/warm_wheels.sh
+pyproject.toml

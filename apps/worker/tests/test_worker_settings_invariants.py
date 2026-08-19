@@ -16,6 +16,7 @@ from roottrace_worker.settings import Settings
 pytestmark = pytest.mark.unit
 
 BASE: dict[str, Any] = {
+    "environment": "local",
     "database_url": "postgresql://postgres:postgres@localhost:54322/postgres",
     "supabase_url": "http://localhost:54321",
     "supabase_service_role_key": "service-role-REPLACE_ME",
@@ -56,3 +57,52 @@ def test_defaults_match_a3s_documented_values() -> None:
     assert result.default_daily_cost_cap_micro_usd == 5_000_000
     assert result.default_monthly_cost_cap_micro_usd == 100_000_000
     assert result.cost_reservation_estimate_micro_usd == 420_000
+
+
+def test_sandbox_defaults_match_a3s_documented_values() -> None:
+    result = settings()
+    assert result.sandbox_enabled is True
+    assert result.sandbox_runtime == "runsc"
+    assert result.sandbox_concurrency == 4
+    assert result.sandbox_timeout_seconds == 90
+    assert result.sandbox_target_p95_seconds == 45
+    assert result.sandbox_memory_limit_mb == 512
+    assert result.sandbox_cpu_limit == 1.0
+    assert result.sandbox_pids_limit == 128
+    assert result.sandbox_disk_limit_mb == 256
+    assert result.sandbox_max_stdout_bytes == 524_288
+    assert result.sandbox_image_python == "roottrace/sandbox-python:3.12"
+    assert result.sandbox_image_node == "roottrace/sandbox-node:20"
+    assert result.sandbox_reaper_interval_seconds == 60
+    assert result.sandbox_orphan_max_age_seconds == 120
+    assert result.sandbox_apparmor_profile is None
+
+
+def test_environment_is_required() -> None:
+    without_environment = {k: v for k, v in BASE.items() if k != "environment"}
+    with pytest.raises(ValidationError, match="environment"):
+        Settings(**without_environment)
+
+
+def test_production_requires_gvisor() -> None:
+    with pytest.raises(ValidationError, match="gVisor required in production"):
+        settings(environment="production", sandbox_runtime="runc")
+
+
+def test_production_requires_sandbox_enabled() -> None:
+    with pytest.raises(ValidationError, match="sandbox cannot be disabled"):
+        settings(environment="production", sandbox_enabled=False)
+
+
+def test_production_with_runsc_and_sandbox_enabled_boots() -> None:
+    result = settings(environment="production", sandbox_runtime="runsc")
+    assert result.environment == "production"
+
+
+def test_non_production_may_use_runc() -> None:
+    """`A3` §5's own local-dev example sets `RT_SANDBOX_RUNTIME=runc` —
+    gVisor is commonly unavailable on a developer machine or in CI."""
+    result = settings(environment="local", sandbox_runtime="runc")
+    assert result.sandbox_runtime == "runc"
+    result = settings(environment="ci", sandbox_runtime="runc")
+    assert result.sandbox_runtime == "runc"

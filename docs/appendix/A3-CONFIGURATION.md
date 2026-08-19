@@ -114,6 +114,7 @@ A V1 deployment is therefore legitimately `RT_ENVIRONMENT=production` + `RT_DEPL
 | `RT_SANDBOX_IMAGE_NODE` | string | `roottrace/sandbox-node:20` | |
 | `RT_SANDBOX_REAPER_INTERVAL_SECONDS` | int | 60 | |
 | `RT_SANDBOX_ORPHAN_MAX_AGE_SECONDS` | int | 120 | |
+| `RT_SANDBOX_APPARMOR_PROFILE` | string | *(unset)* | Added at T6.3. Name of a custom AppArmor profile (`07` §3 L3's `roottrace-sandbox`) loaded on the host. Unset means "apply no override" — Docker's own automatic `docker-default` AppArmor confinement still applies; a custom profile is host-provisioned infrastructure no ticket through T6.3 builds or loads, so this is a disclosed gap (`07` §11 already tracks the equivalent gVisor gap the same way), not a silently weaker default |
 
 ### Pipeline
 

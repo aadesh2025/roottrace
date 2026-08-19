@@ -342,18 +342,18 @@ Any HIGH finding fails the gate **and** caps final confidence at 0. We never pub
 
 ## 7. Input bundle and result contract
 
-### Input (staged at `/opt/roottrace/input.json` before start — **not** under `/work`)
+### Input (delivered over stdin at start — **not** `docker cp` to a file)
 
-> **B10 — why the bundle cannot live under `/work`.** `/work` is a **tmpfs mounted at container start** (L2). `docker cp` runs against a *created but not started* container and writes into the container's filesystem layer. When the container then starts, the tmpfs is mounted over `/work` and **hides everything previously written there** — the runner would find an empty directory and fail with a missing-input error on every single validation. The bundle is therefore staged at `/opt/roottrace/input.json`, which is on the read-only rootfs and outside every mount point. `runner.py` reads it at startup and materialises the working tree into `/work` itself.
+> **B10 — why the bundle travels over stdin, not `docker cp`.** The original design staged the bundle at `/opt/roottrace/input.json` via `docker cp` against a created-but-not-started container, reasoning that `/work` is a **tmpfs mounted at container start** (L2) and would otherwise hide anything written to it before that mount lands. That half of the reasoning is correct and empirically confirmed (T6.1, Docker Engine 29.5.3): a `docker cp` write to a tmpfs path issued before start is gone once the tmpfs mounts.
 >
-> This changes nothing about isolation: `/opt` is read-only to the guest, the bundle contains no credentials, and results still leave via `/work/_roottrace/result.json`, which the supervisor copies out before removal.
+> What the original design missed, also empirically confirmed at T6.1: `docker cp` (the Engine API's `PUT /containers/{id}/archive`) is rejected outright — `"container rootfs is marked read-only"` — for **any** destination path on a container created with `read_only: true` (L2), regardless of container state or which mount the destination resolves to. L2's read-only rootfs and the original B10 mechanism are mutually exclusive as first written; one had to give, and it was not going to be L2.
+>
+> **Fix: the bundle is written to the container's stdin after `start()`, not copied into the filesystem before it.** Stdin is a pipe, not a filesystem write, so it is unaffected by both the tmpfs-timing issue and the read-only rootfs. The container is created with `open_stdin: true`; the orchestrator streams the JSON payload to it immediately after `start()` and closes the stream. `runner.py` reads `sys.stdin` at startup (`read_input_from_stdin`) and materialises the working tree into `/work` itself, same as before — only the delivery mechanism changed, not what the runner does with the payload once it has it.
 
 ```
- host                          container (created)         container (started)
- bundle ──docker cp──►  /opt/roottrace/input.json   ──►  /opt/roottrace/input.json   [ro, visible]
-                        /work/            (empty)   ──►  /work/  [tmpfs mounted]     ← would have hidden it
-                                                          runner.py reads /opt →
-                                                          writes tree into /work
+ host                                    container (started)
+ bundle ──stdin, after start()──►  runner.py reads stdin →
+                                    writes tree into /work (tmpfs, already mounted by now)
 ```
 
 ```jsonc
@@ -379,7 +379,11 @@ Any HIGH finding fails the gate **and** caps final confidence at 0. We never pub
 }
 ```
 
-### Output (`/work/_roottrace/result.json`, read after exit)
+### Output (delimited in captured stdout, read after exit — **not** `docker cp` from `/work`)
+
+> **B10 continued — the same problem, mirrored, on the way out.** The original design read the result back from `/work/_roottrace/result.json` after `container.wait()` returned, reasoning that reading a stopped-but-not-yet-removed container's filesystem was safe. It is not, for `/work` specifically: `/work`'s tmpfs content does not survive the container's own process exiting — confirmed empirically at T6.1 the same way as the input-side finding, `docker cp` against a stopped container's tmpfs path fails with "no such file," independent of whether the container was ever read-only.
+>
+> **Fix: `runner.py` prints the result JSON to stdout, delimited by `===ROOTTRACE_RESULT_START===` / `===ROOTTRACE_RESULT_END===` markers, as the last thing it does before exiting.** Captured stdout/stderr are retained by the container runtime independent of the container's own filesystem lifecycle — `docker logs` (and its Engine API equivalent) reliably returns them from a stopped container, confirmed the same way. The orchestrator reads the container's combined log after `wait()` and extracts the delimited JSON; the delimiters exist so this still works once T6.4 gates start producing their own stdout/stderr chatter ahead of the final result line. `runner.py` still also writes the file, which remains useful to a caller with live access to the running container (`docker exec`) and costs nothing to keep — but no caller may depend on reading it back after exit.
 
 ```jsonc
 {
@@ -430,12 +434,18 @@ async def run_validation(bundle: SandboxInput) -> ValidationResult:
                 pids_limit=128,
                 tmpfs={"/work": "size=256m,mode=1777", "/tmp": "size=64m,mode=1777,noexec"},
                 environment=SANDBOX_ENV,
+                open_stdin=True,
                 labels={"roottrace.validation_id": bundle.validation_id,
                         "roottrace.created_at": now_iso()},
             )
-            # B10: stage OUTSIDE /work — the tmpfs mount at start would hide it.
-            await copy_into(container, "/opt/roottrace/input.json", bundle.json())
             await container.start()
+            # B10 (T6.1, empirically corrected): the bundle travels over
+            # stdin, not `docker cp` — `docker cp` is rejected outright
+            # against a read_only container regardless of destination or
+            # container state, and even without read_only, a pre-start cp
+            # into /work is hidden once the tmpfs mounts at start anyway.
+            await write_stdin(container, bundle.json())
+            await close_stdin(container)
 
             try:
                 await asyncio.wait_for(container.wait(), timeout=90.0)
@@ -443,8 +453,11 @@ async def run_validation(bundle: SandboxInput) -> ValidationResult:
                 await container.kill(signal="SIGKILL")
                 return timeout_result(bundle)
 
-            result = await read_result(container, "/work/_roottrace/result.json")
+            # B10 continued: read the result from the captured log, not
+            # from /work — that tmpfs does not survive the container's own
+            # process exiting, so a post-wait() `docker cp` finds nothing.
             transcript = await container.log(stdout=True, stderr=True)
+            result = extract_result(transcript)          # delimited markers, see §7
             await store_transcript(bundle.validation_id, sanitize(transcript))
             return result
 
@@ -553,7 +566,8 @@ Run in CI on every change to the sandbox image or orchestration code. Any failur
 - [ ] Fork bomb is contained by `pids_limit` and the container dies without affecting the host
 - [ ] A 512 MB allocation attempt is OOM-killed inside the container only
 - [ ] An infinite loop is SIGKILLed at 90 s
-- [ ] The input bundle staged at `/opt/roottrace/input.json` is readable by the runner **after** start (B10 regression guard — proves the `/work` tmpfs does not shadow it)
+- [ ] The input bundle, written to stdin **after** `start()`, is read correctly by the runner (B10 regression guard — proves stdin delivery works under the full isolation profile, `read_only` included)
+- [ ] The result JSON, delimited in captured stdout, is readable via the container's log **after** the container has exited (B10 continued — proves `/work`'s tmpfs does not need to survive exit for the result to reach the caller)
 - [ ] `/work` is empty at container start and contains only runner-written content thereafter
 - [ ] No host path is visible under `/proc/self/mountinfo` beyond the expected tmpfs entries
 - [ ] Container is removed within 5 s of exit; reaper removes any orphan within 120 s

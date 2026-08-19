@@ -57,3 +57,10 @@ Thumbs.db
 
 # Transient export written and deleted by `make audit`.
 .audit-requirements.txt
+
+# ── Sandbox image build artefacts ────────────────────────────────────────
+# The offline wheel cache apps/sandbox-runner/python/Dockerfile bakes into
+# the image — warmed by warm_wheels.sh immediately before `docker build`,
+# same lifecycle as a lockfile-resolved .venv. Not source; `requirements.in`
+# and warm_wheels.sh are what's tracked instead (docs/07 §4).
+apps/sandbox-runner/python/wheels/
