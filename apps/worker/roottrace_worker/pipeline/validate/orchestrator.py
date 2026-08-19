@@ -51,20 +51,41 @@ RESULT_STDOUT_END = "===ROOTTRACE_RESULT_END==="
 
 #: `07` §3 L7 — the container's entire environment. The worker's own
 #: environment (database URLs, LLM keys, GitHub tokens, the Supabase
-#: service-role key) never enters; this dict is exhaustive, not a base to
-#: extend from.
+#: service-role key) never enters; this dict is exhaustive of what *this*
+#: orchestrator supplies, not a base to extend from. `PYTHONPATH` is added
+#: here (not in `07` §3 L7's literal list) because `apps/sandbox-runner`'s
+#: `ENTRYPOINT` (`python -m roottrace_sandbox_runner.runner`) needs it to
+#: resolve the package — made an explicit, owned entry rather than left to
+#: rely on the base image happening to set the same value (T6.3 found it
+#: does, today, but that is the base image's business, not a contract).
 SANDBOX_ENV: dict[str, str] = {
     "PATH": "/usr/local/bin:/usr/bin:/bin",
     "HOME": "/work",
     "LANG": "C.UTF-8",
     "PYTHONDONTWRITEBYTECODE": "1",
     "PYTHONUNBUFFERED": "1",
+    "PYTHONPATH": "/opt",
     "PIP_NO_INDEX": "1",
     "PIP_FIND_LINKS": "/opt/wheels",
     "NPM_CONFIG_OFFLINE": "true",
     "NPM_CONFIG_CACHE": "/opt/npm-cache",
     "CI": "true",
 }
+
+#: T6.3 finding: Docker's container `Env` merges with, never replaces, the
+#: base image's own baked-in `ENV` entries — there is no Engine API or
+#: Dockerfile mechanism to unset an inherited variable, only to overwrite
+#: its value under the same name. `python:3.12-slim-bookworm` bakes in
+#: `GPG_KEY`/`PYTHON_VERSION`/`PYTHON_SHA256` (public release-signing
+#: metadata, not credentials — verified by inspecting their actual values,
+#: not assumed from the names); Docker itself always injects `HOSTNAME`.
+#: None of the four are secrets, but all four are unaccounted for by
+#: `SANDBOX_ENV` above, so the security-verification suite (`07` §12)
+#: checks the container's environment against this *explicit allowlist* —
+#: `SANDBOX_ENV`'s keys plus these four — rather than the narrower
+#: name-pattern regex `07` originally specified, which a variable named
+#: `GPG_KEY` would fail on its name alone despite holding no secret.
+KNOWN_BASE_IMAGE_ENV_KEYS = frozenset({"HOSTNAME", "GPG_KEY", "PYTHON_VERSION", "PYTHON_SHA256"})
 
 #: `07` §3 L5.
 _ULIMITS = (

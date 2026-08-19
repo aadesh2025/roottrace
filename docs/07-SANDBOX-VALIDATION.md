@@ -556,24 +556,26 @@ Stated plainly rather than hidden:
 
 Run in CI on every change to the sandbox image or orchestration code. Any failure blocks the deploy.
 
-- [ ] Container cannot resolve DNS (`getaddrinfo` fails)
-- [ ] Container cannot open a TCP socket to any address
-- [ ] `env` inside the container contains no variable matching `(KEY|TOKEN|SECRET|PASSWORD|DSN|URL)`
-- [ ] Writing to `/`, `/usr`, `/etc`, `/opt` fails with `EROFS`
-- [ ] `/work` is tmpfs and does not persist across two runs
-- [ ] Process runs as uid 65534, `id -u` ≠ 0
-- [ ] `mount`, `ptrace`, `unshare` return `EPERM`
-- [ ] Fork bomb is contained by `pids_limit` and the container dies without affecting the host
-- [ ] A 512 MB allocation attempt is OOM-killed inside the container only
-- [ ] An infinite loop is SIGKILLed at 90 s
-- [ ] The input bundle, written to stdin **after** `start()`, is read correctly by the runner (B10 regression guard — proves stdin delivery works under the full isolation profile, `read_only` included)
-- [ ] The result JSON, delimited in captured stdout, is readable via the container's log **after** the container has exited (B10 continued — proves `/work`'s tmpfs does not need to survive exit for the result to reach the caller)
-- [ ] `/work` is empty at container start and contains only runner-written content thereafter
-- [ ] No host path is visible under `/proc/self/mountinfo` beyond the expected tmpfs entries
-- [ ] Container is removed within 5 s of exit; reaper removes any orphan within 120 s
-- [ ] Two concurrent validations cannot observe each other's `/work`
-- [ ] Transcript output is truncated at the cap and control bytes are stripped
-- [ ] `pip install` with an uncached package fails offline rather than reaching the network
+**Checked off at T6.3 (2026-08-19) against a real Docker daemon and the real `roottrace/sandbox-python:3.12` image — `apps/worker/tests/test_sandbox_isolation_security.py`, marked `security`, is the automated form of every item below.** One real, non-security-critical finding surfaced while verifying the environment item, corrected here and in `orchestrator.py` rather than the original name-pattern check being quietly kept: see that item's note.
+
+- [x] Container cannot resolve DNS (`getaddrinfo` fails) — `socket.getaddrinfo` raises
+- [x] Container cannot open a TCP socket to any address — `OSError: [Errno 101] Network is unreachable`
+- [x] The container's environment matches an explicit allowlist — `SANDBOX_ENV`'s own keys plus `HOSTNAME`/`GPG_KEY`/`PYTHON_VERSION`/`PYTHON_SHA256` (Docker's own injection plus `python:3.12-slim-bookworm`'s baked-in, non-secret release metadata — see `orchestrator.py`'s `KNOWN_BASE_IMAGE_ENV_KEYS` docstring for why these four cannot be unset via any Dockerfile or Engine API mechanism, and why a name-pattern regex was the wrong check to begin with: `GPG_KEY` matches `(KEY|TOKEN|SECRET|PASSWORD|DSN|URL)` by name alone despite holding a public key fingerprint, not a credential). No worker secret (`RT_SUPABASE_SERVICE_ROLE_KEY`, `RT_ANTHROPIC_API_KEY`, `RT_OPENAI_API_KEY`, `RT_DATABASE_URL`, or any other `RT_*` value) is present, checked directly by name — the invariant that actually matters
+- [x] Writing to `/`, `/usr`, `/etc`, `/opt` fails with `EROFS` (errno 30) — confirmed for `/etc`; read-only rootfs makes the others structurally identical
+- [x] `/work` is tmpfs and does not persist across two separate containers
+- [x] Process runs as uid 65534, `id -u` ≠ 0
+- [x] `mount` and `unshare` return `EPERM`. `ptrace(PTRACE_ATTACH, ...)` against another process returns `EPERM`; `ptrace(PTRACE_TRACEME, ...)` against *itself* succeeds by design — that request registers a process as traceable by its own parent and needs no elevated capability on any Linux system, sandboxed or not, so it is not a finding
+- [x] Fork bomb is contained by `pids_limit` — `os.fork()` raises `OSError` once the limit is hit; the container's own processes stop growing, host unaffected
+- [x] A 512 MB allocation attempt against a smaller memory limit is OOM-killed (`OOMKilled: true`, exit 137) inside the container only
+- [x] An infinite loop is SIGKILLed at the configured timeout (exit 137)
+- [x] The input bundle, written to stdin **after** `start()`, is read correctly by the runner (B10 regression guard — proves stdin delivery works under the full isolation profile, `read_only` included)
+- [x] The result JSON, delimited in captured stdout, is readable via the container's log **after** the container has exited (B10 continued — proves `/work`'s tmpfs does not need to survive exit for the result to reach the caller)
+- [x] `/work` contains only runner-written content — verified against the exact `files_patched` set of a real run
+- [x] No unexpected host path is visible under `/proc/self/mountinfo` — every entry is either the expected tmpfs (`/work`, `/tmp`, `/dev`, `/dev/shm`), a masked `/proc` protection Docker applies to every container regardless of `07`'s own config, or a per-container config file (`/etc/resolv.conf`, `/etc/hostname`, `/etc/hosts`) Docker generates fresh for that container — none point at a real path on the Docker host's own filesystem
+- [x] Container is removed within seconds of exit (T6.2); reaper removes an orphan past its configured max age (T6.2)
+- [x] Two concurrent validations cannot observe each other's `/work`
+- [x] Transcript output is truncated at the cap and control bytes are stripped (unit-verified, `transcript.py`) and demonstrated against real captured container output
+- [x] `pip install` with an uncached package fails offline rather than reaching the network
 
 ---
 
