@@ -18,6 +18,7 @@ from roottrace_sandbox_runner.gates import (
     _family_check,
     _module_name,
     _parse_exception_type,
+    _requirement_lines,
 )
 
 pytestmark = pytest.mark.unit
@@ -149,3 +150,12 @@ def test_yaml_safe_load_pattern_does_not_false_positive() -> None:
     safe = "config = yaml.load(stream, Loader=yaml.SafeLoader)"
     yaml_findings = [p for p, _s in _SECURITY_PATTERNS if "yaml" in p.pattern]
     assert not any(pattern.search(safe) for pattern in yaml_findings)
+
+
+def test_requirement_lines_strips_blank_lines_and_comments() -> None:
+    manifest = "fastapi==0.111.0\n\n# a comment\nhttpx==0.27.0\n  \n"
+    assert _requirement_lines(manifest) == ["fastapi==0.111.0", "httpx==0.27.0"]
+
+
+def test_requirement_lines_of_an_empty_manifest_is_empty() -> None:
+    assert _requirement_lines("") == []

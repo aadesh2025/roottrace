@@ -5,17 +5,20 @@
 > open, and what to pick up next. Deliberately un-numbered so it is never
 > mistaken for part of the frozen contract set.
 >
-> **Last updated:** 2026-08-19, this commit (T6.4 — the nine gates — built;
-> T6.1 sandbox image, T6.2 orchestration, and T6.3 isolation all built the
-> same session; Phase 10's mechanism is now complete through G0–G8 —
-> T6.4a's real-p95 measurement across all 25 fixtures and T6.5's degraded
-> mode are what remain, see §1). Phase 8 (AI reasoning) and Phase 9 (patch
-> generation) were completed the prior day, both mechanism-complete with
-> their corpus-wide accuracy bars deferred to `T10.1`. T4.4's calibration
-> finding resolved by the coordinator before any of that; Phase 7 cleared
-> first — see §5 item 13. Every T6.x finding in this entry was made by
-> testing against a real Docker daemon, not assumed from a config dict —
-> see §4's T6.1–T6.4 sections for the corrections that testing surfaced.
+> **Last updated:** 2026-08-19, this commit (T6.5 — degraded mode — built;
+> T6.1 sandbox image, T6.2 orchestration, T6.3 isolation, and T6.4 the nine
+> gates all built the same session; **Phase 10 is now fully built**, T6.1
+> through T6.5. T6.4a's real-p95 measurement across all 25 fixtures is the
+> one item still open, same corpus-wide-statistic shape as `T10.1`, see §1
+> and §5 item 20). Phase 8 (AI reasoning) and Phase 9 (patch generation)
+> were completed the prior day, both mechanism-complete with their
+> corpus-wide accuracy bars deferred to `T10.1`. T4.4's calibration finding
+> resolved by the coordinator before any of that; Phase 7 cleared first —
+> see §5 item 13. Every T6.x finding in this entry was made by testing
+> against a real Docker daemon, not assumed from a config dict — see §4's
+> T6.1–T6.5 sections for the corrections that testing surfaced, including a
+> real `build_passed` correctness bug T6.5's own formal integration suite
+> caught before it shipped, not after.
 > Regenerate this from `docs/15-V1-BUILD-PLAN.md` and `git log` — those are the
 > authorities. If this file and `15` disagree, `15` wins.
 
@@ -25,14 +28,14 @@
 
 **Phase 7 (retrieval) is complete and cleared. Phase 8's and Phase 9's
 mechanisms are complete (T5.1–T5.4), both phases' corpus-wide accuracy
-bars deferred to `T10.1`. Phase 10 (sandbox validation) is now
-mechanism-complete through G0–G8: T6.1 (container image), T6.2
-(orchestration), T6.3 (isolation, the full `07` §12 security checklist),
-and T6.4 (the nine gates) are all built, tested against a real Docker
-daemon, and committed. Two items remain before Phase 10 itself is done: T6.4a (measuring real
-sandbox p95 across all 25 fixtures × 3 runs — a corpus-wide measurement,
-same shape as the accuracy bars deferred above) and T6.5 (degraded mode).
-T6.5 is next.**
+bars deferred to `T10.1`. Phase 10 (sandbox validation) is now fully
+built: T6.1 (container image), T6.2 (orchestration), T6.3 (isolation, the
+full `07` §12 security checklist), T6.4 (the nine gates), and T6.5
+(degraded mode) are all built, tested against a real Docker daemon, and
+committed. One item remains before Phase 10's own bar is fully closed:
+T6.4a (measuring real sandbox p95 across all 25 fixtures × 3 runs — a
+corpus-wide measurement, same shape as the accuracy bars deferred above,
+§5 item 20). Phase 11 (the repair loop, T7.1) is next.**
 
 Phase 7's hard-stop condition (§5 item 13) was resolved by the coordinator
 before Phase 8 started: `03` §S5's original `insufficient_context` threshold
@@ -311,27 +314,106 @@ ticket exists). See §4.
 | Sandbox orchestration (T6.2) | `SandboxOrchestrator` (create → stdin → wait-with-kill → extract → remove) + `SandboxReaper`; every `07` §3 isolation flag set from `create()` | `apps/worker/tests/test_validate_orchestrator*.py` (18) — clean run, 0 s timeout kill, concurrency cap measured against real running containers, reaper reaps an orphan and leaves a fresh one alone |
 | Sandbox isolation (T6.3) | Every `07` §12 checklist item as a live assertion — network, filesystem, identity, syscalls, resource limits, mountinfo | `apps/worker/tests/test_sandbox_isolation_security.py` (17, 1 skipped as a named duplicate of T6.2's own proof) — **one real, disclosed finding**: `GPG_KEY` (public, not a secret) failed the checklist's original name-pattern regex; replaced with an explicit allowlist plus a direct worker-secret-name check |
 | The nine gates (T6.4) | G0/G1 host-side (`pipeline/validate/gates.py`); G2–G8 in-container (`roottrace_sandbox_runner/gates.py`), fail-fast, `07`'s own order. **G4 verified with the real `ValidationResult` printed**: genuine fix passes, theatrical test rejected, unrelated-error test rejected | `apps/sandbox-runner/tests/test_gates_pure.py` (23, pure logic), `apps/worker/tests/test_sandbox_gates_integration.py` (11, live container) — all four `15` T6.4 accept criteria verified individually, not deferred (mechanism claims, not a corpus-wide statistic) |
+| Degraded mode (T6.5) | G2 (`gate_dependencies`) attempts the full offline install first (zero extra cost when nothing is missing); a failure triggers per-line `pip install --dry-run` resolution + a real import check of the patched source to decide `partial` (source still imports) vs `syntax_only` (it doesn't). Non-`full` modes skip G4–G6 (`partial`) or G3–G6 (`syntax_only`) as honest `degraded_skip` entries — `passed: true`, never a fabricated pass on a check that ran. `signals_for_scoring` carries `degraded_mode`/`validation_component_cap`/`band_cap` matching `07` §5's table, and a tri-state `regression_test_valid`/`test_pass_ratio` (`null`, not `false`/`0`, when the gate never ran) | `apps/sandbox-runner/tests/test_gates_pure.py` (+2, `_requirement_lines`), `apps/worker/tests/test_sandbox_gates_integration.py` (+2, live container, both `partial` and `syntax_only`) — `15` T6.5's accept criterion verified directly; found and fixed a real `build_passed` correctness bug in the process (§4) |
 
-**Test totals:** 2,247 collected — 1,221 `unit`, 1,009 `integration`; 237 tests
-also carry the `security` marker. Overall unit coverage **91%** against a ratchet
+**Test totals:** 2,250 collected — 1,223 `unit`, 1,010 `integration`; 237 tests
+also carry the `security` marker. Overall unit coverage **90%** against a ratchet
 of **75**; `pipeline/understand`, `pipeline/retrieve`, `pipeline/reason`,
 `pipeline/patch`, `ai/`, and `pipeline/validate`'s host-side half are all at
 91–100% — clearing `14` §10's ≥90%/≥85% pipeline-stage floor. `roottrace_
-sandbox_runner/gates.py`'s G2–G8 bodies execute inside a container process
-during integration testing — a different OS process entirely, invisible to
-`coverage.py`'s instrumentation of the host pytest run — so their coverage
-percentage understates real verification; the 11 live-container tests in
-`test_sandbox_gates_integration.py` are what actually proves them correct,
-which a line-coverage number on subprocess-shelling code could not do
-regardless of its value.
+sandbox_runner/gates.py`'s G2–G8 bodies (now including T6.5's degraded-mode
+branch) execute inside a container process during integration testing — a
+different OS process entirely, invisible to `coverage.py`'s instrumentation
+of the host pytest run — so their coverage percentage (23%, down from T6.4's
+~25% simply because T6.5 added more container-only lines, not because
+anything regressed) understates real verification; the 13 live-container
+tests across `test_sandbox_gates_integration.py` are what actually proves
+them correct, which a line-coverage number on subprocess-shelling code could
+not do regardless of its value.
 
 ---
 
 ## 4. Decisions taken in this session
 
 This session covers all four Phase 7 tickets (T4.1–T4.4), all three of
-Phase 8's tickets (T5.1, T5.2, T5.3), Phase 9's one ticket (T5.4), and
-Phase 10's first four tickets (T6.1–T6.4).
+Phase 8's tickets (T5.1, T5.2, T5.3), Phase 9's one ticket (T5.4), and all
+five of Phase 10's tickets (T6.1–T6.5) — Phase 10 is now fully built.
+
+### T6.5 — Degraded mode
+
+**Read `07` §5 before touching this section — the cache-coverage table
+("full" / "partial" / "syntax_only") is what this ticket implements.**
+
+- **"Missing non-test deps" vs "missing core deps" is not something
+  anything upstream labels — it's decided empirically, inside G2, the
+  same gate that already does the offline install.** `07` never actually
+  specifies how a manifest line gets classified as one or the other; that
+  distinction had to be designed, not just wired. `gate_dependencies`
+  tries the full `pip install -r <manifest>` first — identical cost to
+  before this ticket when nothing is missing, `mode: "full"`. Only a
+  failure falls into `_gate_dependencies_degraded`: resolve each
+  requirement line individually and offline (`pip install --dry-run`,
+  still `--no-index --find-links /opt/wheels`, no network involved at
+  any point), install what remains for real, then try to import the
+  *application source itself* (`files_patched` — never the regression
+  test or `existing_tests`, which are test-only content the source
+  doesn't need). If the source still imports despite the gap, the
+  missing packages were never load-bearing for the code under
+  validation — `partial`. If it doesn't, the source needs something that
+  isn't there — `syntax_only`.
+- **A missing package is treated as a cache miss without further
+  distinguishing "genuinely not cached" from some other single-line
+  resolution problem** — `07` doesn't ask for that distinction, and
+  building one would be exactly the kind of unrequested precision
+  `CLAUDE.md` warns against. What still fails G2 outright, no degraded
+  mode: the *resolvable* subset itself then failing to install (a real
+  version conflict between two available packages) — a genuine defect,
+  not a cache-coverage gap, and `07` never says to paper over that kind
+  of failure by mistaking it for one.
+- **Skipped gates report `passed: true`, `detail: {"degraded_skip":
+  true, ...}` — a skip, never a fabricated pass on a check that
+  actually ran.** `_MODE_ALLOWED_EXTRA` (`runner.py`) encodes `07` §5's
+  table directly: `partial` still runs G3/G7/G8 for real; `syntax_only`
+  only G7. `signals_for_scoring` gained `validation_component_cap`/
+  `band_cap`, matching `07` §5's cap values (`0.55`/`null` for `partial`,
+  `0.35`/`"low"` for `syntax_only`) — S11 (Phase 13, not yet built) is
+  the actual consumer that applies the cap to compute a capped
+  `validation_component`; this stage's job is only to prove the cap was
+  genuinely earned by a real cache-coverage gap, not to compute the
+  score itself.
+- **`regression_test_valid`/`test_pass_ratio` are now a tri-state, not a
+  bool/float-or-null pair that silently defaults to a value.** `null`
+  when G4/G6 never ran at all is a different claim from `false`/`0` —
+  "not run" and "run and found invalid/zero" must stay distinguishable,
+  or a consumer reading only the boolean would read a degraded-mode skip
+  as a real, negative finding. `SignalsForScoring.regression_test_valid`
+  is now `bool | None` in the contract for exactly this reason.
+- **A real correctness bug found by the formal integration suite itself,
+  before it shipped, not after — the exact discipline `CLAUDE.md`'s
+  testing standard asks for.** The first version of `_signals_for_scoring`
+  computed `build_passed` as `all(g["passed"] for g in (g2, g3) if g is
+  not None)` — vacuously `True` whenever G3 was excluded from that `all()`
+  because it never ran. In `syntax_only` mode G3 never runs by design, so
+  `build_passed` reported `True` even though G2's *own* detail
+  (`core_import_errors`) already proved the application source cannot be
+  imported — the literal reason the mode is `syntax_only` in the first
+  place. `test_g2_degrades_to_syntax_only_when_a_core_import_is_missing`
+  caught this against a live container on the first formal run, not a
+  hand-verified one. **Fixed**, not worked around: `build_passed` is now
+  explicitly `False` whenever `mode == "syntax_only"`, since that mode
+  only exists because the build already failed to prove itself.
+- **The sandbox image had to be rebuilt mid-ticket to pick up the new
+  `gates.py`/`runner.py` code** — `apps/sandbox-runner` is baked into
+  `roottrace/sandbox-python:3.12` at build time (T6.1); editing the host
+  checkout does not change what a running container executes. The first
+  integration run against the *stale* image reported the old, pre-T6.5
+  behaviour and looked like a regression until the image was rebuilt
+  (`docker build -f apps/sandbox-runner/python/Dockerfile -t roottrace/
+  sandbox-python:3.12 apps/sandbox-runner`, reusing the already-warmed
+  wheel cache — no re-run of `warm_wheels.sh` needed since T6.5 added no
+  new dependency). Worth remembering for every future `apps/sandbox-
+  runner` change: the image is a build artifact, not something the
+  orchestrator picks up live.
 
 ### T6.4 — The nine gates
 
@@ -1147,6 +1229,8 @@ as any other session.**
 | 20 | 🔶 **Sandbox p95 (`07`'s own budget) is mechanism-verified per-gate at T6.4, not yet measured across the full corpus** | T6.4 → T6.4a | Every gate's timeout and pass/fail behaviour is proved against real containers (`test_sandbox_gates_integration.py`, 11 cases against live Docker). What is not yet measured is wall-clock p95 for a full `_run_gates()` pass across all 25 corpus fixtures × 3 runs — the same corpus-wide-statistic shape as items 14/19, owned by `T6.4a`, not yet run. Do not close until that measurement exists with real numbers. |
 | 21 | **G6's flaky-test handling is not built** | T6.4 → undecided | `03` §S8 does not specify a re-run-on-failure policy for G6 (existing test suite, pre/post), and `15` T6.4's accept criteria don't require one. `gate_existing_tests` runs each suite once per side and classifies by name-set diff (`newly_failing` vs `already_failing`); a genuinely flaky pre-existing test would show up as `newly_failing` on an unlucky run with no retry to distinguish it from a real regression. No corpus fixture currently exercises this, so it is disclosed rather than guessed at. |
 | 22 | **AppArmor profile is declared in config (T6.1) but not loaded on this dev host** | T6.1/T6.3 → production hardening | `settings.py`'s `sandbox_apparmor_profile` field exists and the boot invariant requires it set (+ `runsc`) in `production`; T6.3's isolation suite ran with seccomp + `network:none` + `runc` (no gVisor, no AppArmor profile loaded) on this Windows/WSL2 dev host, which `07` §11 already treats as an accepted, disclosed local-dev gap, not a silent one. |
+| 23 | **`validation_component_cap`/`band_cap` (T6.5) have no consumer yet** | T6.5 → Phase 13 (S11) | S8 now proves a degraded-mode cap was genuinely earned by a real cache-coverage gap and carries the correct cap value on `signals_for_scoring`, but nothing downstream applies it to an actual `confidence` computation yet — S11 (`03` §S11, T8.x or wherever Phase 13 lands) is the one ticket that reads this field at all. Same deferral shape as items 14/19/20: the mechanism is real and tested, the corpus-wide/end-to-end consumer is not built yet. |
+| 24 | **G8 is excluded from `syntax_only` mode per `07` §5's literal table, even though nothing about G8 (a pure pattern scan of added lines) actually requires a working import** | T6.5 → undecided | Followed the table as written rather than second-guessing it silently (`CLAUDE.md`: "the spec wins unless you can argue the spec is wrong — in which case say so"), but this reads like it could plausibly have been an oversight in `07` rather than a deliberate exclusion — G7 (also static, also import-free) is kept for exactly the reason G8 would need to be kept too. Flagged rather than unilaterally decided; worth raising with the doc's author before Phase 13 needs a firm answer. |
 
 ---
 
@@ -1193,10 +1277,11 @@ make fixtures-verify    # ground truth resolved against real code (also in CI)
 **Phase 7 is complete and cleared (all four tickets, item 13 resolved — see
 §5). Phase 8 and Phase 9 are both mechanism-complete: T5.1 through T5.4 are
 all done; both phases' accuracy bars are explicitly deferred to `T10.1`
-(§5 items 14 and 19). Phase 10 is mechanism-complete through G0–G8: T6.1
-through T6.4 are all done, verified against a real Docker daemon. T6.5
-(`15` §8, degraded mode) is next; T6.4a (real sandbox p95 across the full
-corpus, §5 item 20) remains open alongside it.**
+(§5 items 14 and 19). Phase 10 is now fully built: T6.1 through T6.5 are
+all done, verified against a real Docker daemon. T6.4a (real sandbox p95
+across the full corpus, §5 item 20) remains open, same corpus-wide-statistic
+shape as `T10.1` — it does not block starting Phase 11. T7.1 (`15` §9,
+Stage 9 `repair`) is next.**
 
 | Ticket | Scope | Status |
 |---|---|---|
@@ -1212,18 +1297,22 @@ corpus, §5 item 20) remains open alongside it.**
 | T6.2 | Sandbox orchestration | ✅ Done — `apps/worker/roottrace_worker/pipeline/validate/orchestrator.py`; concurrency bound verified at exactly 2 against a live daemon after a self-caught measurement-methodology fix, see §4's T6.2 section |
 | T6.3 | Sandbox isolation | ✅ Done — full `07` §12 checklist automated against a live container (`test_sandbox_isolation_security.py`); one disclosed finding (`GPG_KEY`), see §4's T6.3 section |
 | T6.4 | The nine gates | ✅ Done — `apps/sandbox-runner/roottrace_sandbox_runner/gates.py` + `apps/worker/.../pipeline/validate/gates.py`; G0–G8 all real, fail-fast; G4 explicitly confirmed to fail on both a theatrical test and an unrelated-error test and pass only on a genuine fix, formal pytest (`test_sandbox_gates_integration.py`, 11/11 against live Docker) matching manual verification exactly; see §4's T6.4 section. Corpus-wide p95 measurement still open — §5 item 20 |
+| T6.5 | Degraded mode | ✅ Done — `mode: full \| partial \| syntax_only` determined empirically inside G2, degraded-mode gate skips are `passed: true`/`degraded_skip: true` (never fabricated), `validation_component_cap`/`band_cap` match `07` §5's table; verified against a live container for both `partial` and `syntax_only`; found and fixed a real `build_passed` correctness bug via the formal suite itself, see §4's T6.5 section. **Phase 10 is now fully built.** |
 
-**T6.5 — Degraded mode** (`15` §8, next, Phase 10, final ticket): read `07`
-§5 ("Degraded mode") before starting. Cache-miss handling with honest mode
-reporting — cache coverage determines `mode: full | partial | syntax_only`,
-gates that need a missing wheel are skipped rather than faked, and the
-validation confidence component is capped, never silently left at full
-confidence with fewer gates actually run. Accept (`15`): removing a
-required wheel produces `mode: "partial"`, the affected gates report
-`skipped`, and the confidence component is capped — never a silent pass.
-This is the last ticket of Phase 10; P1 ("nothing reaches a human without
-proof") is fully satisfied only once a `partial`/`syntax_only` run cannot
-be mistaken for a `full` one anywhere downstream.
+**T7.1 — Stage 9 `repair`** (`15` §9, next, Phase 11): gate-specific
+routing off `03` §S9's own table — G1 syntax → targeted fix prompt, no
+re-reasoning; G2 dependencies → instruct to use only what's already in the
+retrieved context; G3 compile → supply the compiler output verbatim; G4
+regression_pre → regenerate the *test* only, not the fix (a test-quality
+failure, not a code failure); G5 regression_post → return to S6 reasoning,
+not S7, since the diagnosis was wrong; G6 existing_tests → show what broke,
+instruct to preserve contracts or justify the change; G7/G8 → targeted
+remediation of the specific findings. Accept (`15`): each of the eight
+gate-specific routes is individually triggered and produces the correct
+next stage; three failed attempts terminate as `validation_failed` with
+every attempt retained and inspectable. This is what finally closes the
+loop `07`/`03` §S8 exists to feed — a validation failure has had nowhere
+real to go until this ticket.
 
 **Standing rules that still apply:** finish each ticket's acceptance
 criteria before starting the next; commit and push after each ticket

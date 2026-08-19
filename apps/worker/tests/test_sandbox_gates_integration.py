@@ -360,10 +360,18 @@ async def test_g2_installs_real_dependencies_offline(orchestrator: SandboxOrches
     result = await orchestrator.run(bundle)
 
     assert result.passed
-    assert result.gates[0].detail == {"resolved": True}
+    assert result.mode == "full"
+    assert result.gates[0].detail == {"resolved": True, "mode": "full"}
 
 
-async def test_g2_fails_offline_for_an_uncached_package(orchestrator: SandboxOrchestrator) -> None:
+async def test_g2_degrades_to_partial_when_a_non_core_package_is_missing(
+    orchestrator: SandboxOrchestrator,
+) -> None:
+    """`15` T6.5's accept bar: "Removing a required wheel produces `mode:
+    'partial'`, skipped test gates, and a capped validation component —
+    never a silent pass." `mod.py` never imports the missing package, so
+    the source itself still imports fine — `07` §5's "missing non-test
+    deps only" case."""
     original = "def f():\n    return 1\n"
     diff = "--- a/mod.py\n+++ b/mod.py\n@@ -1,2 +1,2 @@\n def f():\n-    return 1\n+    return 2\n"
     g0, files_patched = check_diff_applies(diff, {"mod.py": original})
@@ -377,12 +385,84 @@ async def test_g2_fails_offline_for_an_uncached_package(orchestrator: SandboxOrc
             "path": "requirements.txt",
             "content": "this-package-does-not-exist-xyz==1.0.0\n",
         },
-        gates=("G2",),
+        new_files={"tests/test_regression.py": "def test_x():\n    assert True\n"},
+        regression_test={
+            "path": "tests/test_regression.py",
+            "test_id": "tests/test_regression.py::test_x",
+            "expected_pre": "fail",
+            "expected_post": "pass",
+        },
+        gates=("G2", "G3", "G4", "G5", "G6", "G7", "G8"),
     )
     result = await orchestrator.run(bundle)
 
-    assert not result.passed
-    assert result.failed_gate == "G2"
+    assert result.passed  # a cache miss never fails the whole validation — `07` §5
+    assert result.mode == "partial"
+    assert result.failed_gate is None
+
+    by_gate = {g.gate: g for g in result.gates}
+    assert _detail(by_gate["G2"].detail, "mode") == "partial"
+    assert "this-package-does-not-exist-xyz==1.0.0" in _detail(
+        by_gate["G2"].detail, "missing_packages"
+    )
+    assert "degraded_skip" not in by_gate["G3"].detail  # source still imports — G3 runs for real
+    assert "degraded_skip" not in by_gate["G7"].detail
+    assert "degraded_skip" not in by_gate["G8"].detail
+    for skipped in ("G4", "G5", "G6"):
+        assert by_gate[skipped].detail["degraded_skip"] is True
+        assert by_gate[skipped].passed  # a skip, never a fabricated pass on a real check
+
+    assert result.signals_for_scoring.degraded_mode is True
+    assert result.signals_for_scoring.regression_test_valid is None
+    assert result.signals_for_scoring.test_pass_ratio is None
+    assert result.signals_for_scoring.validation_component_cap == 0.55
+    assert result.signals_for_scoring.band_cap is None
+
+
+async def test_g2_degrades_to_syntax_only_when_a_core_import_is_missing(
+    orchestrator: SandboxOrchestrator,
+) -> None:
+    """`07` §5's "missing core deps" case: the source itself imports the
+    missing package, so not even G3's import check can pass — only G7
+    (pure static analysis, no import required) still runs for real."""
+    original = "import this_package_does_not_exist_xyz\ndef f():\n    return 1\n"
+    diff = (
+        "--- a/mod.py\n+++ b/mod.py\n@@ -1,3 +1,3 @@\n"
+        " import this_package_does_not_exist_xyz\n"
+        " def f():\n"
+        "-    return 1\n"
+        "+    return 2\n"
+    )
+    g0, files_patched = check_diff_applies(diff, {"mod.py": original})
+    assert g0.passed
+    assert files_patched is not None
+
+    bundle = _bundle(
+        files_original={"mod.py": original},
+        files_patched=files_patched,
+        manifest={
+            "path": "requirements.txt",
+            "content": "this-package-does-not-exist-xyz==1.0.0\n",
+        },
+        gates=("G2", "G3", "G4", "G7"),
+    )
+    result = await orchestrator.run(bundle)
+
+    assert result.passed  # still not a blocking failure — cache miss, not a defect
+    assert result.mode == "syntax_only"
+    assert result.failed_gate is None
+
+    by_gate = {g.gate: g for g in result.gates}
+    assert _detail(by_gate["G2"].detail, "mode") == "syntax_only"
+    assert "mod.py" in _detail(by_gate["G2"].detail, "core_import_errors")
+    for skipped in ("G3", "G4"):
+        assert by_gate[skipped].detail["degraded_skip"] is True
+    assert "degraded_skip" not in by_gate["G7"].detail
+
+    assert result.signals_for_scoring.degraded_mode is True
+    assert result.signals_for_scoring.build_passed is False  # G3 never ran to prove it did
+    assert result.signals_for_scoring.validation_component_cap == 0.35
+    assert result.signals_for_scoring.band_cap == "low"
 
 
 async def test_fail_fast_stops_at_the_first_failing_gate(orchestrator: SandboxOrchestrator) -> None:

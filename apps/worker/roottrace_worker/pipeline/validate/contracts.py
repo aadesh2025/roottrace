@@ -95,12 +95,23 @@ class Transcript(_Contract):
 
 
 class SignalsForScoring(_Contract):
+    """`regression_test_valid` is a tri-state, not a plain bool: `None`
+    means G4 did not run at all (degraded `mode`, T6.5), which is a
+    different claim from G4 running and reporting the test invalid. S11
+    (Phase 13, not yet built) is the actual consumer of
+    `validation_component_cap`/`band_cap` — `07` §5's degraded-mode table
+    names the cap values (0.55 / low-band 0.35); this stage only proves the
+    cap was genuinely triggered by a real cache-coverage gap, not compute
+    the capped score itself, which needs the rest of S11's formula."""
+
     build_passed: bool
-    regression_test_valid: bool
+    regression_test_valid: bool | None = None
     test_pass_ratio: float | None = None
     new_static_findings_high: int = Field(ge=0, default=0)
     new_static_findings_medium: int = Field(ge=0, default=0)
     degraded_mode: bool = False
+    validation_component_cap: float | None = None
+    band_cap: Literal["low"] | None = None
 
 
 class ValidationResult(_Contract):

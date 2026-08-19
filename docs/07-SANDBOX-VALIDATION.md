@@ -239,6 +239,10 @@ Degraded mode is stated explicitly in the UI and in the PR description. We never
 
 The cache is refreshed weekly from PyPI/npm download rankings, and any package appearing in a customer manifest is queued for inclusion in the next refresh.
 
+> **T6.5 — how "missing non-test deps" vs "missing core deps" is actually decided.** This table names the two categories by what's missing; nothing upstream of the sandbox actually labels a manifest line "test-only" or "core." The distinction is drawn empirically, inside `gate_dependencies` (G2), the same gate that already runs the offline install: a full `pip install -r <manifest>` is attempted first, exactly as in `full` mode, at no extra cost when nothing is missing. Only if that fails does the container work out *which* lines are actually unresolvable (`pip install --dry-run`, one line at a time, still fully offline against `/opt/wheels`), install whatever remains, and then try to import the patched application source itself (`files_patched` — never the regression test or `existing_tests`, which are test-only content) with whatever *did* install. If the source still imports, the missing packages were never load-bearing for the code under validation — `partial`. If it doesn't, the source itself needs something that isn't there — `syntax_only`. A missing package is treated as a cache miss without further distinguishing "genuinely not cached" from some other single-line resolution problem; `07` does not ask for that distinction and inventing one would be unrequested precision. What is **not** absorbed into degraded mode: the *resolvable* subset of the manifest itself failing to install (e.g. a real version conflict between two available packages) is still a genuine G2 failure, `passed: false`, exactly as before this ticket — a cache-coverage gap and a real dependency defect are different claims and are reported differently.
+>
+> **The skipped gates are marked `passed: true`, `detail: {"degraded_skip": true, ...}` — never silently omitted and never a fabricated pass on a check that actually ran.** `signals_for_scoring` carries `degraded_mode`, a `validation_component_cap`/`band_cap` pair matching this table's own values (`null`/`null` for `full`, `0.55`/`null` for `partial`, `0.35`/`"low"` for `syntax_only`), and `regression_test_valid`/`test_pass_ratio` both fall back to `null` (not `false`/`0`) when G4/G6 never ran — a tri-state, not a bool, since "the test was proven invalid" and "the test was never run" are different claims. S11 (Phase 13, not yet built) is what actually applies the cap to compute a capped `validation_component`; this stage's job is only to prove the cap was genuinely earned by a real cache-coverage gap, which `apps/worker/tests/test_sandbox_gates_integration.py`'s two degraded-mode tests verify against a live container for both `partial` and `syntax_only`.
+
 ---
 
 ## 6. The gate sequence in detail
@@ -399,11 +403,13 @@ Any HIGH finding fails the gate **and** caps final confidence at 0. We never pub
   "transcript": { "stdout_bytes": 48211, "stderr_bytes": 1204, "truncated": false },
   "signals_for_scoring": {
     "build_passed": true,
-    "regression_test_valid": true,
-    "test_pass_ratio": 1.0,
+    "regression_test_valid": true,          // null (not false) when G4 never ran — T6.5
+    "test_pass_ratio": 1.0,                 // null when G6 never ran
     "new_static_findings_high": 0,
     "new_static_findings_medium": 1,
-    "degraded_mode": false
+    "degraded_mode": false,
+    "validation_component_cap": null,       // 0.55 (partial) | 0.35 (syntax_only) — T6.5
+    "band_cap": null                        // "low" for syntax_only only — T6.5
   }
 }
 ```

@@ -85,11 +85,19 @@ def gate_dependencies(bundle: dict[str, Any], work_dir: Path) -> dict[str, Any]:
     set for reproducibility." `--user` (not `--target`) so subsequent
     `python` invocations pick the installed packages up automatically via
     `site.ENABLE_USER_SITE` — no `PYTHONPATH` juggling needed between
-    gates."""
+    gates.
+
+    T6.5: a full `pip install -r` failure does not, by itself, mean G2
+    failed — `07` §5: "If a required package isn't cached, we do not fail
+    the whole validation." The common case (everything cached) pays no
+    extra cost — one `pip install -r` call, exactly as before. Only a
+    failure falls through to `_gate_dependencies_degraded`, which is where
+    the real/cache-miss distinction and the `full`/`partial`/`syntax_only`
+    mode determination happen."""
     started = time.monotonic()
     manifest = bundle.get("manifest")
     if not manifest:
-        return _gate_result("G2", True, 0, {"skipped": "no manifest declared"})
+        return _gate_result("G2", True, 0, {"skipped": "no manifest declared", "mode": "full"})
 
     materialize_tree(work_dir, bundle.get("files_patched", {}))
     manifest_path = work_dir / "_roottrace_manifest.txt"
@@ -117,13 +125,128 @@ def gate_dependencies(bundle: dict[str, Any], work_dir: Path) -> dict[str, Any]:
         manifest_path.unlink(missing_ok=True)
 
     duration_ms = int((time.monotonic() - started) * 1000)
-    passed = proc.returncode == 0
-    detail: dict[str, Any] = (
-        {"resolved": True}
-        if passed
-        else {"stderr_tail": proc.stderr[-2000:], "exit_code": proc.returncode}
+    if proc.returncode == 0:
+        return _gate_result("G2", True, duration_ms, {"resolved": True, "mode": "full"})
+
+    return _gate_dependencies_degraded(
+        bundle, work_dir, manifest=manifest, timeout=timeout, started=started
     )
-    return _gate_result("G2", passed, duration_ms, detail)
+
+
+def _requirement_lines(content: str) -> list[str]:
+    return [
+        line.strip()
+        for line in content.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+
+
+def _core_imports_ok(
+    bundle: dict[str, Any], work_dir: Path, *, timeout: float
+) -> tuple[bool, dict[str, str]]:
+    """Whether the application source under change (`files_patched` —
+    never `new_files`/`existing_tests`, which are test-only content) still
+    imports with whatever *did* install. This is the line `07` §5's table
+    draws between `partial` (the missing packages are ones the source
+    itself never touches — test tooling, most likely) and `syntax_only`
+    (the source itself cannot even be imported without them)."""
+    materialize_tree(work_dir, bundle.get("files_patched", {}))
+    import_errors: dict[str, str] = {}
+    for path in bundle.get("files_patched", {}):
+        module = _module_name(path)
+        if module is None:
+            continue
+        proc = _run([sys.executable, "-c", f"import {module}"], cwd=work_dir, timeout=timeout)
+        if proc.returncode != 0:
+            import_errors[path] = proc.stderr[-1000:]
+    return not import_errors, import_errors
+
+
+def _gate_dependencies_degraded(
+    bundle: dict[str, Any],
+    work_dir: Path,
+    *,
+    manifest: dict[str, Any],
+    timeout: float,
+    started: float,
+) -> dict[str, Any]:
+    """The full install already failed once (`gate_dependencies`). Find out
+    exactly which requirement lines are actually unresolvable offline
+    (`pip install --dry-run`, one line at a time — no network, no install,
+    just resolution against `/opt/wheels`), install what remains for real,
+    then use `_core_imports_ok` to decide `partial` vs `syntax_only`.
+
+    A requirement line resolving as unavailable is treated as a cache
+    miss without further distinguishing "genuinely not cached" from "some
+    other resolution problem with this one line" — `07` §5 does not ask
+    for that distinction, and inventing one here would be exactly the kind
+    of unrequested precision `CLAUDE.md` warns against. What *does* still
+    fail this gate outright (`passed: False`, no degraded mode) is the
+    resolvable subset itself then failing to install — that is a real
+    defect (e.g. a version conflict between two available packages), not a
+    cache-coverage gap, and `07` never says to paper over that kind of
+    failure."""
+    requirements = _requirement_lines(manifest["content"])
+    missing: list[str] = []
+    available: list[str] = []
+    for req in requirements:
+        proc = _run(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--no-index",
+                "--find-links",
+                WHEELS_DIR,
+                "--dry-run",
+                req,
+            ],
+            cwd=work_dir,
+            timeout=timeout,
+        )
+        (available if proc.returncode == 0 else missing).append(req)
+
+    if available:
+        install_proc = _run(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--no-index",
+                "--find-links",
+                WHEELS_DIR,
+                "--user",
+                *available,
+            ],
+            cwd=work_dir,
+            timeout=timeout,
+        )
+        if install_proc.returncode != 0:
+            duration_ms = int((time.monotonic() - started) * 1000)
+            return _gate_result(
+                "G2",
+                False,
+                duration_ms,
+                {
+                    "reason": "dependency resolution failed for reasons other than a cache miss",
+                    "stderr_tail": install_proc.stderr[-2000:],
+                    "missing_packages": missing,
+                },
+            )
+
+    core_ok, import_errors = _core_imports_ok(bundle, work_dir, timeout=timeout)
+    mode = "partial" if core_ok else "syntax_only"
+    duration_ms = int((time.monotonic() - started) * 1000)
+    detail: dict[str, Any] = {
+        "mode": mode,
+        "missing_packages": missing,
+        "resolved_packages": available,
+    }
+    if not core_ok:
+        detail["core_import_errors"] = import_errors
+    return _gate_result("G2", True, duration_ms, detail)
 
 
 def _module_name(path: str) -> str | None:

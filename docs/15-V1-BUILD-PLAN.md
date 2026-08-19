@@ -541,6 +541,8 @@ Cache-miss handling with honest mode reporting and confidence capping.
 
 **Accept:** Removing a required wheel produces `mode: "partial"`, skipped test gates, and a capped validation component — never a silent pass.
 
+**Built.** `gate_dependencies` (G2) attempts the full offline install first, at no extra cost when nothing is missing; only a failure triggers the degraded-mode determination — which requirement lines are actually unresolvable (`pip install --dry-run`, offline, one line at a time), install what remains, then check whether the application source itself (`files_patched`) still imports. Source that still imports despite the gap → `partial` (G4/G5/G6 skipped); source that can't → `syntax_only` (only G7 also runs, per `07` §5's table). Skipped gates report `passed: true`, `detail.degraded_skip: true` — a skip, never a fabricated pass — and `signals_for_scoring` carries `degraded_mode`, `validation_component_cap`/`band_cap` matching `07` §5's own cap values, and a tri-state `regression_test_valid`/`test_pass_ratio` (`null`, not `false`/`0`, when G4/G6 never ran — "not run" and "run and failed" are different claims). Verified against a live container for both `partial` and `syntax_only` (`apps/worker/tests/test_sandbox_gates_integration.py`). Full detail, including a self-caught `build_passed` correctness fix found while writing these tests, in `PROJECT-STATUS.md`'s T6.5 section.
+
 ---
 
 ## 9. Week 7 — Repair loop and scoring
