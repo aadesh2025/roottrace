@@ -45,7 +45,7 @@ dev = [
   # ruff versions, `make fmt` and the commit hook can disagree about the same
   # file and fight each other on every commit.
   "ruff>=0.16,<0.17",
-  "mypy>=1.18,<2.0",
+  "mypy>=1.18,<3.0",
   # >=9.0.3: 8.4.2 carries PYSEC-2026-1845, caught by `make audit` on the first
   # run. The original <9.0 ceiling would have pinned us below the fix.
   "pytest>=9.0.3,<10.0",
