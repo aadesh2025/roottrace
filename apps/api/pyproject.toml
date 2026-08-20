@@ -19,7 +19,7 @@ dependencies = [
   # neither survives a REST call.
   "psycopg[binary,pool]>=3.2,<4.0",
   # Idempotency claims, rate-limit buckets and the ingest queue (docs/03 §S1).
-  "redis>=5.2,<7.0",
+  "redis>=5.2,<9.0",
 ]
 
 [build-system]
