@@ -109,8 +109,10 @@ class RootCauseAnalysis(_Contract):
     reasoning_chain: tuple[ReasoningStep, ...]
     eliminated_hypotheses: tuple[EliminatedHypothesis, ...] = ()
     fix_strategy: FixStrategy
-    #: `03` line 865: recorded, weighted at only 15% of the final score
-    #: (`06` §7.1) — real signals from execution dominate.
+    #: `03` §S11: recorded, weighted at only 10% of the final score
+    #: (`06` §7.1) — real signals from execution dominate. (Corrected at
+    #: T7.3 from a stale "15%" written before `score.stage.py` existed to
+    #: check the real formula against.)
     self_assessed_confidence: float = Field(ge=0.0, le=1.0)
     uncertainty_notes: tuple[str, ...] = ()
     model: str

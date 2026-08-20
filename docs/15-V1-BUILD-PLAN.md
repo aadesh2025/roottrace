@@ -569,6 +569,8 @@ Six components, all hard gates, band assignment, publish-mode decision.
 
 **Accept:** Hand-computed expected scores match for 10 constructed scenarios. Every hard gate is individually verified. `build_passed = false` produces `confidence = 0`.
 
+**Built.** The only stage in this pipeline that is genuinely synchronous (`03` §S11: "Pure computation, no LLM") — `score()` is a plain `def`, not `async def`. This is also the ticket that finally reads `07` §5's degraded-mode cap fields (`validation_component_cap`/`band_cap`, T6.5) and `critique.contracts.Critique`/the no-critique-available case (T7.2), both left with no consumer since they were built. A real finding from wiring them in: T6.5's own conservative tri-state handling (`regression_test_valid`/`test_pass_ratio` both `null` in `partial` mode; `build_passed: false` in `syntax_only` mode) already keeps the raw validation component under `07`'s stated caps in both real degraded scenarios, so the caps' own mechanism — implemented and unit-tested directly — turns out to be a correctly-built safety net that S11's own hard gates already made redundant in practice, not a caught bug. `RootCauseAnalysis.self_assessed_confidence`'s docstring, written at T5.3 before this formula existed to check against, incorrectly said "15%"; corrected to the real 10% in the same commit. 10 hand-computed scenarios and all five hard gates verified directly, each with the arithmetic written out in the test itself so the expected numbers aren't merely copied from the implementation; 100% coverage on the new module.
+
 ---
 
 ## 10. Week 8 — Publish and pipeline viewer
