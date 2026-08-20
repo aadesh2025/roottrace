@@ -5,22 +5,20 @@
 > open, and what to pick up next. Deliberately un-numbered so it is never
 > mistaken for part of the frozen contract set.
 >
-> **Last updated:** 2026-08-19, this commit (T7.1 — Stage 9 `repair` — built;
-> T6.1–T6.5 (the full sandbox validation phase) all built the same session.
-> **Phase 10 and Phase 11 are both now complete.** T6.4a's real-p95
-> measurement across all 25 fixtures is the one item still open anywhere in
-> the completed phases, same corpus-wide-statistic shape as `T10.1`, see §1
-> and §5 item 20). Phase 8 (AI reasoning) and Phase 9 (patch generation)
-> were completed the prior day, both mechanism-complete with their
-> corpus-wide accuracy bars deferred to `T10.1`. T4.4's calibration finding
-> resolved by the coordinator before any of that; Phase 7 cleared first —
-> see §5 item 13. Every T6.x finding in this entry was made by testing
-> against a real Docker daemon, not assumed from a config dict — see §4's
-> T6.1–T6.5 sections for the corrections that testing surfaced, including a
-> real `build_passed` correctness bug T6.5's own formal integration suite
-> caught before it shipped, not after. T7.1's own design decisions — most
-> notably which failure signals are and are not repairable — are disclosed
-> in §4's T7.1 section and §5, not silently made.
+> **Last updated:** 2026-08-20, this commit (T7.2 — Stage 10 `critique` —
+> built; T7.1 and the full sandbox validation phase, T6.1–T6.5, were all
+> built the prior session. **Phase 10, 11, and 12 are all now complete.**
+> T6.4a's real-p95 measurement across all 25 fixtures is the one item still
+> open anywhere in the completed phases, same corpus-wide-statistic shape as
+> `T10.1`, see §1 and §5 item 20. Phase 8 (AI reasoning) and Phase 9 (patch
+> generation) were completed two days prior, both mechanism-complete with
+> their corpus-wide accuracy bars deferred to `T10.1`. T4.4's calibration
+> finding resolved by the coordinator before any of that; Phase 7 cleared
+> first — see §5 item 13. T7.2's own design decisions — most notably that
+> `CritiqueRequest` structurally excludes `Patch.explanation`/
+> `risk_assessment` rather than merely omitting them by convention, and that
+> `blocking`/`security_review.clean` are recomputed rather than trusted from
+> the model — are disclosed in §4's T7.2 section, not silently made.
 > Regenerate this from `docs/15-V1-BUILD-PLAN.md` and `git log` — those are the
 > authorities. If this file and `15` disagree, `15` wins.
 
@@ -38,11 +36,15 @@ One item remains before Phase 10's own bar is fully closed: T6.4a
 (measuring real sandbox p95 across all 25 fixtures × 3 runs — a
 corpus-wide measurement, same shape as the accuracy bars deferred above,
 §5 item 20) — it does not block downstream work. Phase 11 (the repair
-loop) is also now fully built: T7.1 gives every gate failure a
-deterministic `strategy`/`reroute_to_stage` plus a model-enhanced
-`instruction_delta`, with three real, disclosed scoping decisions about
-which failure signals this stage can and cannot repair (§4, §5). Phase 12
-(independent review, T7.2) is next.**
+loop) is fully built: T7.1 gives every gate failure a deterministic
+`strategy`/`reroute_to_stage` plus a model-enhanced `instruction_delta`,
+with three real, disclosed scoping decisions about which failure signals
+this stage can and cannot repair (§4, §5). Phase 12 (independent review)
+is also now fully built: T7.2's `GatewayCritic` gives every patch a fresh-
+context adversarial review on a separate tier, structurally unable to see
+S6's reasoning or S7's own self-assessment, with `blocking` computed from
+the reply's own facts rather than trusted from the model. Phase 13
+(confidence engine, T7.3) is next.**
 
 Phase 7's hard-stop condition (§5 item 13) was resolved by the coordinator
 before Phase 8 started: `03` §S5's original `insufficient_context` threshold
@@ -263,36 +265,38 @@ dashboard yet.
 | 8 | AI reasoning | T5.1–T5.3 | 🔶 Mechanism complete — all 3 tickets built; accuracy bar deferred to T10.1, see §5 item 14 |
 | 9 | Patch generation | T5.4 | 🔶 Mechanism complete — built; accuracy bar deferred to T10.1, see §5 item 19 |
 | 10 | Sandbox validation | T6.1–T6.5 | ✅ **Complete — all 5 tickets built (G0–G8 plus degraded mode); T6.4a's real-p95 measurement is the one open item, see §5 item 20** |
-| **11** | **Repair loop** | **T7.1** | ✅ **Complete — deterministic G1–G8 routing plus a `fast`-tier instruction-delta enhancement, see §4** |
-| 12 | Independent review | T7.2 | ⬜ Not started |
+| 11 | Repair loop | T7.1 | ✅ **Complete — deterministic G1–G8 routing plus a `fast`-tier instruction-delta enhancement, see §4** |
+| **12** | **Independent review** | **T7.2** | ✅ **Complete — fresh-context `reasoning-b` critique, structurally excludes S6/S7's own reasoning, `blocking` recomputed rather than trusted, see §4** |
 | 13 | Confidence engine | T7.3 | ⬜ Not started |
 | 14 | Fixture GitHub transport | T8.1 | ⬜ Not started |
 | 15 | Evaluation harness | T10.1 | ⬜ Not started |
 | 16 | Dashboard | T8.2–T8.4, T9.1–T9.8 | ⬜ Not started |
 
-**27 tickets closed of 47** (T7.1 is the 27th), **Phase 7 cleared, Phase 8
+**28 tickets closed of 47** (T7.2 is the 28th), **Phase 7 cleared, Phase 8
 and Phase 9 both mechanism-complete** (both accuracy bars deferred to
-T10.1), **Phase 10 and Phase 11 both complete**. See §1. (39 tickets
+T10.1), **Phase 10, 11, and 12 all complete**. See §1. (39 tickets
 have their own section in `15`; T9.1–T9.8 are listed as a table in `15`
 §11.)
 
-Of the 14 pipeline stages in `03`, **S1–S9 all exist**, S5 in full: frame
+Of the 14 pipeline stages in `03`, **S1–S10 all exist**, S5 in full: frame
 path resolution, four of five fetch strategies (strategy C deliberately
 deferred to V2 — the index is never populated in V1), and ranking/dedup/budget/
-quality scoring. **S4's, S6's, S7's, and S9's seams are all closed** —
+quality scoring. **S4's, S6's, S7's, S9's, and S10's seams are all closed** —
 `GatewayExtractor` (T5.2), `GatewayReasoner` (T5.3), `GatewayPatcher`
-(T5.4), and `GatewayRepairer` (T7.1) are real `StructuredExtractor` /
-`StructuredReasoner` / `StructuredPatcher` / `StructuredRepairer`
-implementations, each assembling the five-layer prompt (`ai/prompts`,
-T5.2) and calling `LLMGateway.complete` (T5.1), each tested end-to-end
-against `FakeProvider` — S9 is the one of the four with no live-gated
-smoke test yet, disclosed in §5. **S8 (`validate`) is real too** —
-`SandboxOrchestrator` drives the real `roottrace/sandbox-python:3.12`
-image through a real G0–G8 sequence, proven against a live Docker daemon
-rather than mocked. What is still missing for any of S4–S9 to run against
-a real investigation is orchestration — nothing yet constructs any of
-them with real IDs and wires S4 → S5 → S6 → S7 → S8 → S9 together for a
-live error (no orchestration ticket exists). See §4.
+(T5.4), `GatewayRepairer` (T7.1), and `GatewayCritic` (T7.2) are real
+`StructuredExtractor` / `StructuredReasoner` / `StructuredPatcher` /
+`StructuredRepairer` / `StructuredCritic` implementations, each tested
+end-to-end against `FakeProvider` — T7.2 is unique among them in
+replacing the shared system prompt entirely rather than assembling the
+usual five-layer stack, per `03` §S10's "fresh context" requirement.
+Neither T7.1 nor T7.2 has a live-gated smoke test yet, disclosed in §5.
+**S8 (`validate`) is real too** — `SandboxOrchestrator` drives the real
+`roottrace/sandbox-python:3.12` image through a real G0–G8 sequence,
+proven against a live Docker daemon rather than mocked. What is still
+missing for any of S4–S10 to run against a real investigation is
+orchestration — nothing yet constructs any of them with real IDs and
+wires S4 → S5 → S6 → S7 → S8 → S9 → S10 together for a live error (no
+orchestration ticket exists). See §4.
 
 ---
 
@@ -324,15 +328,17 @@ live error (no orchestration ticket exists). See §4.
 | The nine gates (T6.4) | G0/G1 host-side (`pipeline/validate/gates.py`); G2–G8 in-container (`roottrace_sandbox_runner/gates.py`), fail-fast, `07`'s own order. **G4 verified with the real `ValidationResult` printed**: genuine fix passes, theatrical test rejected, unrelated-error test rejected | `apps/sandbox-runner/tests/test_gates_pure.py` (23, pure logic), `apps/worker/tests/test_sandbox_gates_integration.py` (11, live container) — all four `15` T6.4 accept criteria verified individually, not deferred (mechanism claims, not a corpus-wide statistic) |
 | Degraded mode (T6.5) | G2 (`gate_dependencies`) attempts the full offline install first (zero extra cost when nothing is missing); a failure triggers per-line `pip install --dry-run` resolution + a real import check of the patched source to decide `partial` (source still imports) vs `syntax_only` (it doesn't). Non-`full` modes skip G4–G6 (`partial`) or G3–G6 (`syntax_only`) as honest `degraded_skip` entries — `passed: true`, never a fabricated pass on a check that ran. `signals_for_scoring` carries `degraded_mode`/`validation_component_cap`/`band_cap` matching `07` §5's table, and a tri-state `regression_test_valid`/`test_pass_ratio` (`null`, not `false`/`0`, when the gate never ran) | `apps/sandbox-runner/tests/test_gates_pure.py` (+2, `_requirement_lines`), `apps/worker/tests/test_sandbox_gates_integration.py` (+2, live container, both `partial` and `syntax_only`) — `15` T6.5's accept criterion verified directly; found and fixed a real `build_passed` correctness bug in the process (§4) |
 | S9 `repair` (T7.1) | `strategy`/`reroute_to_stage` deterministic from `failed_gate` alone (`routing.py`, one row per G1–G8, `03` §S9's own table); `GatewayRepairer` — the real `StructuredRepairer`, `fast` tier — writes a case-specific `instruction_delta` around the deterministic instruction text, falling back to that text (never terminal) on gateway failure; attempt exhaustion checked before routing so a terminal `validation_failed` never depends on the failing gate being routable; `G0`/`"timeout"`/`"runner_error"` deliberately excluded from routing, disclosed as an open tension with `03` §S8's own timeout prose (§5) | `apps/worker/tests/test_repair_routing.py` (16), `test_repair_stage.py` (23), `test_repair_gateway_repairer.py` (7) — 98% coverage on the new module; both `15` T7.1 accept criteria hold (all eight routes individually triggered, three-strikes exhaustion preserves every attempt) |
+| S10 `critique` (T7.2) | `GatewayCritic` — the real `StructuredCritic`, `reasoning-b` tier, `critique/v2.md`'s system layer *replaces* the shared L1 rather than extending it (`split_critique_prompt`); `CritiqueRequest` accepts only `diff: str`, structurally excluding `Patch.explanation`/`risk_assessment`/`alternatives_considered`; `blocking` and `security_review.clean` recomputed by the stage, never trusted from the model's own self-report; no deterministic floor and not terminal on gateway failure — `CritiqueOutcome.unavailable` is S10's own third shape | `apps/worker/tests/test_critique_gateway_critic.py` (8), `test_critique_stage.py` (9) — 99% coverage on the new module; both `15` T7.2 accept criteria hold, including one full end-to-end test propagating a genuinely backdoored diff's scripted reject verdict through the real gateway into a blocking `Critique` |
 
-**Test totals:** 2,283 collected — 1,256 `unit`, 1,010 `integration`; 237 tests
-also carry the `security` marker. Overall unit coverage **90%** against a ratchet
-of **75**; `pipeline/understand`, `pipeline/retrieve`, `pipeline/reason`,
-`pipeline/patch`, `pipeline/repair`, `ai/`, and `pipeline/validate`'s
-host-side half are all at 91–100% — clearing `14` §10's ≥90%/≥85%
-pipeline-stage floor. `roottrace_sandbox_runner/gates.py`'s G2–G8 bodies
-(including T6.5's degraded-mode branch) execute inside a container process
-during integration testing — a different OS process entirely, invisible to
+**Test totals:** 2,303 collected — 1,276 `unit`, 1,010 `integration`; 237 tests
+also carry the `security` marker. Overall unit coverage **91%** against a
+ratchet of **75**; `pipeline/understand`, `pipeline/retrieve`,
+`pipeline/reason`, `pipeline/patch`, `pipeline/repair`,
+`pipeline/critique`, `ai/`, and `pipeline/validate`'s host-side half are
+all at 91–100% — clearing `14` §10's ≥90%/≥85% pipeline-stage floor.
+`roottrace_sandbox_runner/gates.py`'s G2–G8 bodies (including T6.5's
+degraded-mode branch) execute inside a container process during
+integration testing — a different OS process entirely, invisible to
 `coverage.py`'s instrumentation of the host pytest run — so their coverage
 percentage (23%) understates real verification; the 13 live-container tests
 across `test_sandbox_gates_integration.py` are what actually proves them
@@ -345,8 +351,81 @@ do regardless of its value.
 
 This session covers all four Phase 7 tickets (T4.1–T4.4), all three of
 Phase 8's tickets (T5.1, T5.2, T5.3), Phase 9's one ticket (T5.4), all
-five of Phase 10's tickets (T6.1–T6.5), and Phase 11's one ticket
-(T7.1) — Phase 10 and Phase 11 are both now fully built.
+five of Phase 10's tickets (T6.1–T6.5), Phase 11's one ticket (T7.1), and
+Phase 12's one ticket (T7.2) — Phase 10, 11, and 12 are all now fully built.
+
+### T7.2 — Stage 10 `critique`
+
+**Read `03` §S10 and `A2` §6 before touching this section — `critique/
+v2.md` already existed, written ahead of this ticket during T5.1/T5.2's
+prompt-registry work, with its own comment explaining how to read it.**
+
+- **`CritiqueRequest` accepts `diff: str`, never a `Patch` object — a
+  structural choice, not a documentation one.** `03` §S10 is explicit
+  about what the critic must not see: "S7's explanation or self-
+  assessment." `Patch` carries exactly those fields (`explanation`,
+  `risk_assessment`, `alternatives_considered`) alongside the diff a
+  critique legitimately needs. Passing the whole object and merely
+  *remembering* not to render three of its fields is the kind of
+  discipline that erodes the first time someone adds a field to `Patch`
+  without checking every call site that touches it — accepting only the
+  diff text makes the omission impossible to get wrong later, the same
+  reasoning `understand.extractor.ExtractionRequest`'s own docstring
+  gives for narrowing a raw event down to named fields instead of passing
+  the event itself.
+- **`critique/v2.md` replaces the shared system layer (L1) entirely,
+  rather than being appended to it like every other stage's prompt
+  file.** `A2` §6's own heading says so — "System layer override" — and
+  the file's own leading HTML comment (present before this ticket
+  started) told its future implementer exactly how to read it: split on
+  the `---` break, everything above is the system-layer override,
+  everything below is the task layer. `split_critique_prompt` is the
+  first real reader of that comment, and strips the comment itself
+  before either half reaches a model — it was written as documentation
+  for T7.2, never meant to travel in a prompt.
+- **`blocking` and `security_review.clean` are recomputed by the stage,
+  never trusted from the model's own reply — even though `A2` §6's task
+  layer explicitly instructs the model to set both itself.** Both are
+  facts already derivable from the rest of the same reply
+  (`verdict`/`findings[].severity` for `blocking`; `concerns` for
+  `clean`), and trusting a redundant self-report of an already-computable
+  fact is exactly what `patch.stage.patch`'s own docstring warns against
+  ("the stage does not trust a patcher's word for it either"). Tested
+  directly: a scripted reply claiming `verdict: "approve_with_notes"` and
+  `blocking: false` while also listing a `critical`-severity finding is
+  still correctly marked `blocking: True` by the stage, and a reply
+  claiming `security_review.clean: true` while listing a concern is
+  corrected to `clean: False`.
+- **No deterministic floor, and not terminal either — S10's own third
+  shape, distinct from every stage before it in this codebase.** S4 has a
+  real deterministic pre-parse; S9 has a real deterministic instruction
+  text. S10 has neither — there is no algorithmic substitute for an
+  adversarial code review — but `03` §S10 also explicitly forbids
+  treating a gateway failure as terminal for the whole investigation
+  ("proceed to S11 with `critic_component = 0`"). `CritiqueOutcome.
+  unavailable` is that third shape: not a value standing in for the
+  review, and not a reason to stop the investigation, just an honest
+  "this did not happen" for whichever caller (eventually S11) reads it.
+- **Finding evidence is deliberately not run through `reason.validate`'s
+  literal-string evidence-binding check, unlike S6's reasoning chain.**
+  `03` §S10's own worked example gives evidence as `{repo_path,
+  line_range}` with no `excerpt` field at all, unlike `reason.contracts.
+  Evidence`'s four-kind, excerpt-checked shape — that binding discipline
+  is written inside `03` §S6's section specifically ("Hard rule —
+  evidence binding"), not S10's. Building an equivalent check for
+  critique findings would mean inventing an excerpt-citation format the
+  model was never asked to produce, for a property no `15` T7.2 accept
+  criterion asks for. Disclosed, not silently skipped — same shape as
+  T5.4's H4 omission (§5 item 18).
+- **No live-gated smoke test yet, same disclosed gap T7.1 has.**
+  `GatewayCritic` is tested end-to-end against `FakeProvider`
+  (`test_critique_gateway_critic.py`), including one full test that
+  scripts a reject verdict for a genuinely backdoored diff and confirms
+  it propagates through the real gateway into a `blocking: True`
+  `Critique` — `15` T7.2's own accept criterion, satisfied end-to-end
+  rather than only at the hand-built-double level. No `test_critique_
+  live.py` exists yet against a real model; tracked in §5 alongside
+  T7.1's identical gap.
 
 ### T7.1 — Stage 9 `repair`
 
@@ -1344,6 +1423,9 @@ as any other session.**
 | 26 | **`G0` (diff-apply, host-side) has no repair route** | T7.1 → undecided | Neither `03` §S9's routing table nor `A2` §7's instruction table names G0 — both start at G1. Whether this is deliberate (G0 failures are unambiguous diff-format errors that don't need a gate-specific instruction the way G1-G8 do) or an oversight (the same shape of gap as item 24's G8/`syntax_only` question) is not decided here — `repair()` raises `UnroutableGateError` for it, consistent with `gate_instructions.py`'s own "unrecognised gate is a bug in the caller" precedent, but a real G0 failure reaching S9 today would have no way forward at all. |
 | 27 | **No `test_repair_live.py` smoke test against a real model** | T7.1 → undecided | T5.2/T5.3/T5.4 each ship one live-gated smoke test (`understand_live`/`reason_live`/`patch_live`, skipped without `RT_ANTHROPIC_API_KEY`) confirming the mechanism survives a real model's actual output shape, not just `FakeProvider`'s scripted replies. `GatewayRepairer` has no equivalent yet — `test_repair_gateway_repairer.py` is `FakeProvider`-only. The pattern the other three establish is straightforward to extend here; simply not done in this ticket. |
 | 28 | **`validation_component_cap`/`band_cap` and `instruction_delta` both still have no real caller wiring S8 → S9 → S6/S7 together for a live investigation** | T7.1 → wherever orchestration lands (T8.2 or earlier) | Same shape as item 15: `repair()` is proven end-to-end against hand-built doubles and `FakeProvider`, but nothing yet constructs a `GatewayRepairer` with real IDs, calls it after a real `SandboxOrchestrator.run()` failure, or re-enters S6/S7 with the resulting `instruction_delta`. Pipeline orchestration remains out of scope for every ticket built through T7.1. |
+| 29 | **No `test_critique_live.py` smoke test against a real model** | T7.2 → undecided | Same disclosed gap as item 27/T7.1. `GatewayCritic` is tested end-to-end against `FakeProvider` (`test_critique_gateway_critic.py`), including one full test propagating a scripted reject verdict for a genuinely backdoored diff through the real gateway into a blocking `Critique` — but no live-gated smoke test confirms the mechanism survives a real model's actual output shape yet. |
+| 30 | **Finding evidence citations are not run through `reason.validate`'s literal-string evidence-binding check** | T7.2 → undecided | `03` §S10's own worked example gives evidence as `{repo_path, line_range}` with no `excerpt` field, unlike `reason.contracts.Evidence`'s four-kind, excerpt-checked shape — that binding discipline is written inside `03` §S6's section specifically, not S10's, and no `15` T7.2 accept criterion asks for it. Building an equivalent check would mean inventing an excerpt-citation format the model was never asked to produce. `CLAUDE.md`'s P2 ("every claim carries its evidence, verified by literal string comparison") is a whole-pipeline principle, so this is worth revisiting if a future ticket needs critique findings held to the same rigor as S6's reasoning chain — not done here since `03` itself doesn't ask for it at S10. |
+| 31 | **`Critique`/`CritiqueUnavailable` and the resulting `critic_component`/`should_publish` decision have no real caller wiring S8/S9 → S10 → S11 together for a live investigation** | T7.2 → wherever orchestration lands (T8.2 or earlier) | Same shape as items 15/28: `critique()` is proven end-to-end against hand-built doubles and `FakeProvider`, but nothing yet constructs a `GatewayCritic` with real IDs, calls it after a real validated patch, or feeds the resulting `Critique`/`CritiqueUnavailable` into S11's not-yet-built `critic_component` computation. Pipeline orchestration remains out of scope for every ticket built through T7.2. |
 
 ---
 
@@ -1390,11 +1472,11 @@ make fixtures-verify    # ground truth resolved against real code (also in CI)
 **Phase 7 is complete and cleared (all four tickets, item 13 resolved — see
 §5). Phase 8 and Phase 9 are both mechanism-complete: T5.1 through T5.4 are
 all done; both phases' accuracy bars are explicitly deferred to `T10.1`
-(§5 items 14 and 19). Phase 10 and Phase 11 are both now fully built: T6.1
-through T6.5 (verified against a real Docker daemon) and T7.1 are all done.
-T6.4a (real sandbox p95 across the full corpus, §5 item 20) remains open,
-same corpus-wide-statistic shape as `T10.1` — it does not block Phase 12.
-T7.2 (`15` §9, Stage 10 `critique`) is next.**
+(§5 items 14 and 19). Phase 10, 11, and 12 are all now fully built: T6.1
+through T6.5 (verified against a real Docker daemon), T7.1, and T7.2 are
+all done. T6.4a (real sandbox p95 across the full corpus, §5 item 20)
+remains open, same corpus-wide-statistic shape as `T10.1` — it does not
+block Phase 13. T7.3 (`15` §9, Stage 11 `score`) is next.**
 
 | Ticket | Scope | Status |
 |---|---|---|
@@ -1412,21 +1494,26 @@ T7.2 (`15` §9, Stage 10 `critique`) is next.**
 | T6.4 | The nine gates | ✅ Done — `apps/sandbox-runner/roottrace_sandbox_runner/gates.py` + `apps/worker/.../pipeline/validate/gates.py`; G0–G8 all real, fail-fast; G4 explicitly confirmed to fail on both a theatrical test and an unrelated-error test and pass only on a genuine fix, formal pytest (`test_sandbox_gates_integration.py`, 11/11 against live Docker) matching manual verification exactly; see §4's T6.4 section. Corpus-wide p95 measurement still open — §5 item 20 |
 | T6.5 | Degraded mode | ✅ Done — `mode: full \| partial \| syntax_only` determined empirically inside G2, degraded-mode gate skips are `passed: true`/`degraded_skip: true` (never fabricated), `validation_component_cap`/`band_cap` match `07` §5's table; verified against a live container for both `partial` and `syntax_only`; found and fixed a real `build_passed` correctness bug via the formal suite itself, see §4's T6.5 section. **Phase 10 is now fully built.** |
 | T7.1 | Stage 9 — `repair` | ✅ Done — `apps/worker/roottrace_worker/pipeline/repair/*`; `strategy`/`reroute_to_stage` deterministic per `03` §S9's own table, `GatewayRepairer` (fast tier) enhances `instruction_delta` with a real, disclosed fallback on gateway failure; 98% coverage; both `15` T7.1 accept criteria clean; three disclosed routing gaps (`G0`/`"timeout"`/`"runner_error"`) and no live-gated smoke test yet — see §4's T7.1 section and §5 items 25–28. **Phase 11 is now fully built.** |
+| T7.2 | Stage 10 — `critique` | ✅ Done — `apps/worker/roottrace_worker/pipeline/critique/*`; `CritiqueRequest` structurally excludes S7's explanation/self-assessment (`diff: str`, never `Patch`), `critique/v2.md`'s system-layer override replaces L1 rather than extending it, `blocking`/`security_review.clean` recomputed rather than trusted; 99% coverage; both `15` T7.2 accept criteria clean, including a full end-to-end backdoored-patch-rejected test; disclosed gaps (no evidence-binding on findings, no live-gated smoke test) — see §4's T7.2 section and §5 items 29–31. **Phase 12 is now fully built.** |
 
-**T7.2 — Stage 10 `critique`** (`15` §9, next, Phase 12): read `03` §S10
-before starting. Independent adversarial review — a fresh context (the
-error, the bundle, the diff, and the sandbox results only, deliberately
-*not* the reasoning that produced them, so the review isn't anchored on
-S6/S7's own justification), a separate provider where available, seven
-review dimensions, and blocking rules (`reject` or any `critical`
-severity finding terminates the investigation as `low_confidence`
-regardless of sandbox results). Accept (`15`): the critic receives only
-the error, the bundle, the diff, and the sandbox results — verified by
-inspecting the assembled prompt; a deliberately backdoored patch is
-rejected. `06` §2.4's fresh-context requirement is the one property worth
-testing most carefully here, the same way T6.4 gave G4's "must actually
-gate" property the most scrutiny in Phase 10 — a critic that can see its
-own prior reasoning is not independent, whatever its verdict says.
+**T7.3 — Stage 11 `score`** (`15` §9, next, Phase 13): read `03` §S11
+before starting. Pure computation, no LLM — six weighted components
+(`validation_component` 0.30, `critic_component` 0.20, `retrieval_
+component` 0.15, `evidence_component` 0.15, `model_self_assessment`
+0.10, `historical_component` 0.10, the last a constant 0.5 in V1), five
+hard gates that force a low outcome regardless of the arithmetic
+(`build_passed = false` → 0, critic `reject` → capped 0.25, any critical
+security finding → 0, `regression_test_valid = false` → capped 0.50,
+`retrieval.quality.score < 0.4` → capped 0.45), and band assignment
+(high/medium/low/insufficient) driving the publish-mode decision. This is
+the ticket that finally reads `validation_component_cap`/`band_cap`
+(§5 item 23) and `Critique`/`CritiqueUnavailable` (§5 item 31) — the two
+open items T6.5 and T7.2 left for "whichever ticket builds S11." Accept
+(`15`): hand-computed expected scores match for 10 constructed scenarios;
+every hard gate individually verified; `build_passed = false` produces
+`confidence = 0`. Being pure computation with no model call, this is also
+the first stage since T4.4 with no `FakeProvider`/gateway seam to build at
+all — every test is a direct, deterministic assertion against the formula.
 
 **Standing rules that still apply:** finish each ticket's acceptance
 criteria before starting the next; commit and push after each ticket

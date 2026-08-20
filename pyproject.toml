@@ -134,6 +134,10 @@ ignore = [
 # names the S9 seam the way the four above name S4, S6, S7, and the GitHub
 # gateway's.
 "apps/worker/roottrace_worker/pipeline/repair/repairer.py" = ["N818"]
+# A sixth instance of the same `XUnavailable` symmetry: `CriticUnavailable`
+# names the S10 seam the way the five above name S4, S6, S7, S9, and the
+# GitHub gateway's.
+"apps/worker/roottrace_worker/pipeline/critique/critic.py" = ["N818"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"
