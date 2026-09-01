@@ -14,7 +14,7 @@
 # python:3.12-slim-bookworm. Bump with:
 #   docker buildx imagetools inspect python:3.12-slim-bookworm \
 #     --format '{{println .Manifest.Digest}}'
-FROM python@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2 AS builder
+FROM python@sha256:8edbf9e42c7fb168b9c523718ed907117e6d2e60f5889c0c499bbda3a787da53 AS builder
 
 WORKDIR /build
 
@@ -43,7 +43,7 @@ RUN uv export --frozen --no-dev --package roottrace-api \
  && grep -q '^fastapi==' requirements.txt \
  && uv pip install --system --no-cache -r requirements.txt
 
-FROM python@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2
+FROM python@sha256:8edbf9e42c7fb168b9c523718ed907117e6d2e60f5889c0c499bbda3a787da53
 
 # Fixed UID, so a volume mounted from the host has predictable ownership and
 # the container cannot be silently rebuilt as root by a later base image.
