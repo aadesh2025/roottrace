@@ -16,7 +16,7 @@
 # T6.1 re-verifies against the real hardened image.
 
 # python:3.12-slim-bookworm, the same digest the api image is pinned to.
-FROM python@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2
+FROM python@sha256:be8ccd085666c34273c9dc5607c9842f8b2e3116128aae45148ce164c07ce09d
 
 RUN groupadd -r app && useradd -r -g app -u 10001 app
 
