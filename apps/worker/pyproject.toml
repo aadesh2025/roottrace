@@ -24,7 +24,7 @@ dependencies = [
   # The cost-cap circuit breaker (B9) and the deterministic-stage cache
   # (`06` §2.4) — same library `apps/api` uses for idempotency and rate
   # limits.
-  "redis>=5.2,<7.0",
+  "redis>=5.2,<9.0",
   # Object storage writes for prompt/response persistence (T5.1) — a
   # direct REST call against Supabase Storage rather than the `supabase-py`
   # SDK, which pulls in gotrue/postgrest/realtime/storage3 for one PUT.
